@@ -621,6 +621,48 @@ print("✓ PR 26: Team + TeamResult")
 
 
 # =============================================================================
+# PR 27 — Toolkit
+# =============================================================================
+
+from ninetrix import Toolkit, Tool
+
+assert Toolkit is not None
+
+# Build via decorator
+_kit = Toolkit("math_tools", description="Math utilities")
+
+@_kit.tool
+def add_numbers(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+assert len(_kit) == 1
+assert _kit.tools()[0].name == "add_numbers"
+
+# Build from existing @Tool functions
+@Tool
+def multiply_numbers(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+
+_kit2 = Toolkit("math2", [multiply_numbers])
+assert len(_kit2) == 1
+
+# to_yaml
+_yaml = _kit.to_yaml()
+assert "tools:" in _yaml
+assert "add_numbers" in _yaml
+
+# Agent accepts Toolkit
+from ninetrix import Agent
+_agent = Agent(provider="anthropic", tools=[_kit])
+_info = _agent.info()
+assert "add_numbers" in _info.local_tools
+
+print("✓ PR 27: Toolkit")
+
+
+# =============================================================================
 # PR 29 — Testing utilities
 # =============================================================================
 

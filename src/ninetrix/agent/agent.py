@@ -325,15 +325,20 @@ class Agent(HooksMixin, Generic[T_Output]):
             :class:`~ninetrix.agent.introspection.AgentInfo`
         """
         cfg = self.config
-        local_names = [
-            getattr(t, "name", getattr(t, "__name__", str(t)))
-            for t in cfg.local_tools
-        ]
+        from ninetrix.tools.toolkit import Toolkit
+        local_names: list[str] = []
+        for t in cfg.local_tools:
+            if isinstance(t, Toolkit):
+                local_names.extend(td.name for td in t.tools())
+            else:
+                local_names.append(
+                    getattr(t, "name", getattr(t, "__name__", str(t)))
+                )
         return AgentInfo(
             name=cfg.name,
             provider=cfg.provider,
             model=cfg.model,
-            tool_count=len(cfg.local_tools) + len(cfg.mcp_tools) + len(cfg.composio_tools),
+            tool_count=len(local_names) + len(cfg.mcp_tools) + len(cfg.composio_tools),
             local_tools=local_names,
             mcp_tools=list(cfg.mcp_tools),
             composio_tools=list(cfg.composio_tools),
@@ -498,22 +503,26 @@ class Agent(HooksMixin, Generic[T_Output]):
         # 3. Build tool sources
         sources = []
         if cfg.local_tools:
-            from ninetrix.registry import _registry
+            from ninetrix.registry import _registry, ToolDef
             from ninetrix.runtime.dispatcher import LocalToolSource
-            # Accept both ToolDef instances and raw @Tool-decorated callables
+            # Accept ToolDef, @Tool-decorated callables, and Toolkit objects
             tool_defs = []
             for t in cfg.local_tools:
-                # If it's already a ToolDef, use directly
-                from ninetrix.registry import ToolDef
+                # Toolkit — unwrap all its ToolDefs
+                from ninetrix.tools.toolkit import Toolkit
+                if isinstance(t, Toolkit):
+                    tool_defs.extend(t.tools())
+                    continue
+                # Already a ToolDef — use directly
                 if isinstance(t, ToolDef):
                     tool_defs.append(t)
-                else:
-                    # Look up in global registry by name
-                    name = getattr(t, "__name__", None) or getattr(t, "name", None)
-                    if name:
-                        td = _registry.get(name)
-                        if td is not None:
-                            tool_defs.append(td)
+                    continue
+                # @Tool-decorated callable — look up in global registry by name
+                name = getattr(t, "__name__", None) or getattr(t, "name", None)
+                if name:
+                    td = _registry.get(name)
+                    if td is not None:
+                        tool_defs.append(td)
             sources.append(LocalToolSource(tool_defs))
 
         # MCP tools — wire MCPToolSource when gateway_url is configured
