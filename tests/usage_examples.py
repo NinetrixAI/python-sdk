@@ -158,6 +158,27 @@ print("✓ PR 6: Providers")
 
 
 # =============================================================================
+# PR 7 — NinetrixLogger
+# =============================================================================
+
+from ninetrix.observability.logger import NinetrixLogger, enable_debug, get_logger
+from ninetrix import NinetrixLogger as NL, enable_debug as ed, get_logger as gl
+assert NL is NinetrixLogger
+assert ed is enable_debug
+assert gl is get_logger
+
+log = NinetrixLogger("usage_examples")
+log.info("logger works", key="value")
+log.debug("debug suppressed at default WARNING level")
+log.warning("warn visible")
+
+log2 = get_logger("usage_examples.sub")
+assert "usage_examples.sub" in log2._logger.name
+
+print("✓ PR 7: NinetrixLogger")
+
+
+# =============================================================================
 # PR 13 — MessageHistory + BudgetTracker
 # =============================================================================
 

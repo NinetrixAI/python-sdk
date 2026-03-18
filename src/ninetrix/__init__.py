@@ -51,6 +51,11 @@ from ninetrix.providers import (
     FallbackConfig as FallbackConfig,
     FallbackProviderAdapter as FallbackProviderAdapter,
 )
+from ninetrix.observability.logger import (
+    NinetrixLogger as NinetrixLogger,
+    enable_debug as enable_debug,
+    get_logger as get_logger,
+)
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -82,6 +87,10 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 7 — Logger
+    "NinetrixLogger",
+    "enable_debug",
+    "get_logger",
     # PR 6 — Providers
     "FallbackConfig",
     "FallbackProviderAdapter",
