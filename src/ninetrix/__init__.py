@@ -83,6 +83,7 @@ from ninetrix._internals.tenant import (
 from ninetrix.runtime.history import MessageHistory as MessageHistory
 from ninetrix.runtime.budget import BudgetTracker as BudgetTracker, BudgetUsage as BudgetUsage
 from ninetrix.runtime.runner import AgentRunner as AgentRunner, RunnerConfig as RunnerConfig
+from ninetrix.runtime.planner import Planner as Planner
 from ninetrix.checkpoint.base import Checkpointer as Checkpointer
 from ninetrix.checkpoint.memory import InMemoryCheckpointer as InMemoryCheckpointer
 from ninetrix.agent.config import AgentConfig as AgentConfig
@@ -150,6 +151,8 @@ __all__ = [
     # PR 17 — Checkpointer + InMemoryCheckpointer
     "Checkpointer",
     "InMemoryCheckpointer",
+    # PR 24 — Planner
+    "Planner",
     # PR 16 — AgentRunner + RunnerConfig
     "AgentRunner",
     "RunnerConfig",

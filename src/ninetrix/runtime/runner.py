@@ -79,6 +79,7 @@ class RunnerConfig:
     output_retries: int = 1
     provider_config: Optional[ProviderConfig] = None
     history_max_tokens: int = 128_000
+    execution_mode: str = "direct"          # "direct" | "planned"
 
     def effective_provider_config(self) -> ProviderConfig:
         """Return the provider config to use, building a default if not set."""
@@ -137,8 +138,14 @@ class AgentRunner:
         self.dispatcher = dispatcher
         self.config = config
         self.checkpointer = checkpointer
-        self.event_bus = event_bus              # reserved — not used until PR 20
+        self.event_bus = event_bus
         self._budget = BudgetTracker(max_usd=config.max_budget_usd)
+        # Planner — only in "planned" execution mode
+        if config.execution_mode == "planned":
+            from ninetrix.runtime.planner import Planner
+            self._planner: Optional[Any] = Planner(config)
+        else:
+            self._planner = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -203,6 +210,19 @@ class AgentRunner:
         tools = self.dispatcher.all_tool_definitions()
         output_schema = _get_output_schema(self.config.output_type)
         pconfig = self.config.effective_provider_config()
+
+        # ── Optional planning phase ────────────────────────────────────
+        if self._planner is not None:
+            plan = await self._planner.plan(message, tools, self.provider)
+            if plan:
+                message = self._planner.build_execution_prompt(message, plan)
+                # Rebuild the user message in history with the planned prompt
+                history = MessageHistory(max_tokens=self.config.history_max_tokens)
+                if self.config.system_prompt:
+                    history.append({"role": "system", "content": self.config.system_prompt})
+                for msg in restored:
+                    history.append(msg)
+                history.append({"role": "user", "content": message})
 
         # ── Agentic loop ───────────────────────────────────────────────
         final_content = ""

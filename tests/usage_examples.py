@@ -521,25 +521,36 @@ print("✓ PR 23: MCPToolSource + ComposioToolSource")
 
 
 # =============================================================================
-# PR 24 — Team (dynamic routing)
+# PR 24 — Planner (plan-then-execute mode)
 # =============================================================================
 
-# Uncomment when PR 24 lands:
-#
-# from ninetrix import Agent, Team
-#
-# billing = Agent(name="billing", provider="anthropic", model="claude-haiku-4-5-20251001",
-#                 role="Billing specialist")
-# support = Agent(name="support", provider="anthropic", model="claude-haiku-4-5-20251001",
-#                 role="Technical support")
-#
-# team = Team(
-#     agents=[billing, support],
-#     router_model="claude-haiku-4-5-20251001",
-# )
-# # result = team.run("I was charged twice")
-# # assert result.routed_to == "billing"
-# print("✓ PR 24: Team")
+from ninetrix import Planner
+from ninetrix.runtime.runner import RunnerConfig
+
+assert Planner is not None
+
+_planner = Planner(RunnerConfig(name="bot"))
+_plan = _planner.build_execution_prompt(
+    "Do something",
+    {"goal": "accomplish the task", "steps": ["step 1", "step 2"]},
+)
+assert "step 1" in _plan
+assert "Execution Plan" in _plan or "Plan" in _plan
+
+# Agent with planned execution mode
+from ninetrix import Agent
+_a = Agent(provider="anthropic", execution_mode="planned")
+assert _a.config.execution_mode == "planned"
+
+# Team block moved to PR 26
+# from ninetrix import Team
+# billing = Agent(name="billing", provider="anthropic", ...)
+# support = Agent(name="support", provider="anthropic", ...)
+# team = Team(agents=[billing, support], router_model="claude-haiku-4-5-20251001")
+# result = team.run("I was charged twice")
+# assert result.routed_to == "billing"
+
+print("✓ PR 24: Planner")
 
 
 # =============================================================================

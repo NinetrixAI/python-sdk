@@ -556,6 +556,7 @@ class Agent(HooksMixin, Generic[T_Output]):
             output_type=cfg.output_type,
             output_retries=cfg.output_retries,
             history_max_tokens=cfg.history_max_tokens,
+            execution_mode=cfg.execution_mode,
         )
 
         return AgentRunner(
