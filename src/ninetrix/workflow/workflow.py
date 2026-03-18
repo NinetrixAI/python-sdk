@@ -92,6 +92,7 @@ class WorkflowRunner:
         # Preserve wrapped-function metadata
         self.__name__ = name
         self.__doc__ = fn.__doc__
+        self._injected_checkpointer: Any = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -130,10 +131,20 @@ class WorkflowRunner:
         thread_id = thread_id or uuid.uuid4().hex[:16]
         t0 = time.monotonic()
 
+        # ── Durable mode setup ────────────────────────────────────────
+        checkpointer = None
+        cached_steps: dict = {}
+        if self._durable:
+            checkpointer = self._injected_checkpointer or await self._build_checkpointer()
+            if checkpointer is not None:
+                cached_steps = await checkpointer.get_completed_steps(thread_id)
+
         ctx = WorkflowContext(
             thread_id=thread_id,
             durable=self._durable,
             max_budget_usd=self._max_budget_usd,
+            checkpointer=checkpointer,
+            cached_steps=cached_steps,
         )
 
         token = _current_ctx.set(ctx)
@@ -141,11 +152,15 @@ class WorkflowRunner:
             output = await self._fn(*args, **kwargs)
         finally:
             _current_ctx.reset(token)
+            if checkpointer is not None and self._injected_checkpointer is None:
+                try:
+                    await checkpointer.disconnect()
+                except Exception:
+                    pass
 
-        total_tokens = sum(
-            r.tokens_used for r in ctx._step_results.values()
-        )
-        total_cost = sum(r.cost_usd for r in ctx._step_results.values())
+        # Step results are plain values (not AgentResult) in durable mode
+        total_tokens = 0
+        total_cost = 0.0
         budget_remaining = (
             ctx._budget.remaining
             if self._max_budget_usd > 0.0
@@ -164,6 +179,35 @@ class WorkflowRunner:
             budget_remaining_usd=budget_remaining,
             budget_limit_usd=self._max_budget_usd,
         )
+
+    # ------------------------------------------------------------------
+    # Checkpointer factory
+    # ------------------------------------------------------------------
+
+    async def _build_checkpointer(self) -> Any:
+        """Build a checkpointer for durable mode.
+
+        Resolution order:
+        1. ``db_url`` kwarg on the decorator → PostgresCheckpointer
+        2. ``DATABASE_URL`` env var → PostgresCheckpointer
+        3. Fallback → InMemoryCheckpointer (useful in tests)
+        """
+        import os
+        db_url = self._db_url or os.environ.get("DATABASE_URL", "")
+        if db_url:
+            try:
+                from ninetrix.checkpoint.postgres import PostgresCheckpointer
+                cp = PostgresCheckpointer(db_url)
+                await cp.connect()
+                return cp
+            except ImportError:
+                pass  # asyncpg not installed — fall through to in-memory
+        from ninetrix.checkpoint.memory import InMemoryCheckpointer
+        return InMemoryCheckpointer()
+
+    def inject_checkpointer(self, checkpointer: Any) -> None:
+        """Inject a pre-built checkpointer (used in tests to skip DB setup)."""
+        self._injected_checkpointer = checkpointer
 
     def __repr__(self) -> str:  # pragma: no cover
         mode = "durable" if self._durable else "direct"

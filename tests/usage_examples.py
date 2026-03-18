@@ -680,30 +680,58 @@ print("✓ PR 28: PostgresCheckpointer")
 
 
 # =============================================================================
-# PR 29 — Testing utilities
+# PR 29 — Durable workflow (step-level checkpointing + resume)
 # =============================================================================
 
-# Uncomment when PR 29 lands:
-#
-# import asyncio
-# from ninetrix import Agent, Tool, MockTool, AgentSandbox
-#
-# mock_search = MockTool("search_web", returns=[{"title": "Paris", "url": "x.com"}])
-#
-# agent = Agent(
-#     provider="anthropic",
-#     model="claude-sonnet-4-6",
-#     tools=[mock_search],
-# )
-#
-# async def sandbox_test():
-#     async with AgentSandbox(agent) as sb:
-#         result = await sb.run("What is the capital of France?")
-#     assert sb.cost_usd < 0.01
-#     mock_search.assert_called_once()
-#
-# # asyncio.run(sandbox_test())
-# print("✓ PR 29: MockTool + AgentSandbox")
+import asyncio as _asyncio
+from ninetrix import Workflow
+from ninetrix.checkpoint.memory import InMemoryCheckpointer
+from ninetrix.workflow.context import _StepResult
+
+# _StepResult basics
+_sr = _StepResult()
+assert not _sr.is_cached
+assert _sr.value is None
+
+_sr2 = _StepResult(cached_value="cached", is_cached=True)
+assert _sr2.is_cached
+assert _sr2.value == "cached"
+
+# Durable fresh run saves steps
+_cp = InMemoryCheckpointer()
+
+@Workflow(durable=True)
+async def _durable_pipeline(msg: str) -> str:
+    async with Workflow.step("step1") as s:
+        s.set(f"processed:{msg}")
+    return "done"
+
+_durable_pipeline.inject_checkpointer(_cp)
+_result = _asyncio.run(_durable_pipeline.arun("hello", thread_id="ex-t1"))
+assert _result.output == "done"
+assert "step1" in _result.completed_steps
+assert _result.skipped_steps == []
+
+# Resume — skips completed steps
+_cp2 = InMemoryCheckpointer()
+_cp2._steps["ex-t2"] = {"research": {"result": "old_data", "step_index": 1, "status": "completed", "saved_at": 0.0}}
+
+_calls = []
+
+@Workflow(durable=True)
+async def _resume_pipeline() -> str:
+    async with Workflow.step("research") as s:
+        if not s.is_cached:
+            _calls.append("ran")
+            s.set("new_data")
+    return "done"
+
+_resume_pipeline.inject_checkpointer(_cp2)
+_r2 = _asyncio.run(_resume_pipeline.arun(thread_id="ex-t2"))
+assert "ran" not in _calls       # step was cached, body skipped the expensive call
+assert "research" in _r2.skipped_steps
+
+print("✓ PR 29: durable=True Workflow + step checkpointing")
 
 
 # =============================================================================

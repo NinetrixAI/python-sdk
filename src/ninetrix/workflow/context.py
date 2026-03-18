@@ -9,9 +9,57 @@ from __future__ import annotations
 import asyncio
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable
 
 from ninetrix._internals.types import AgentResult, BudgetExceededError
+
+
+# ---------------------------------------------------------------------------
+# _StepResult — yielded by step() context manager
+# ---------------------------------------------------------------------------
+
+
+class _StepResult:
+    """Yielded by ``async with Workflow.step("name") as step:``.
+
+    On a **fresh run** ``step.is_cached`` is ``False`` and ``step.value``
+    is ``None``.  Call ``step.set(value)`` inside the block to store the
+    result for future resumes.
+
+    On **resume** (the step was already completed in a prior run),
+    ``step.is_cached`` is ``True`` and ``step.value`` holds the
+    previously stored result.  Expensive operations can be skipped::
+
+        async with Workflow.step("research") as step:
+            if not step.is_cached:
+                r = await researcher.arun(topic)
+                step.set(r.output)          # persist for resume
+            # step.value has the result either way
+    """
+
+    def __init__(self, cached_value: Any = None, is_cached: bool = False) -> None:
+        self._cached = is_cached
+        self._value: Any = cached_value
+        self._new_value: Any = None
+        self._has_new_value: bool = False
+
+    @property
+    def is_cached(self) -> bool:
+        """``True`` if this step was already completed in a prior run."""
+        return self._cached
+
+    @property
+    def value(self) -> Any:
+        """The step result: cached value on resume, or value passed to :meth:`set`."""
+        if self._has_new_value:
+            return self._new_value
+        return self._value
+
+    def set(self, value: Any) -> None:
+        """Store *value* as this step's result (persisted on durable runs)."""
+        self._new_value = value
+        self._has_new_value = True
 
 
 # ---------------------------------------------------------------------------
@@ -95,13 +143,19 @@ class WorkflowContext:
         thread_id: str,
         durable: bool = False,
         max_budget_usd: float = 0.0,
+        checkpointer: Any = None,
+        cached_steps: dict[str, Any] | None = None,
     ) -> None:
         self._thread_id = thread_id
         self._durable = durable
         self._budget = WorkflowBudgetTracker(max_budget_usd)
-        self._step_results: dict[str, AgentResult] = {}
+        self._step_results: dict[str, Any] = {}
         self._completed_steps: list[str] = []
         self._skipped_steps: list[str] = []
+        self._checkpointer = checkpointer
+        # Pre-loaded step results from a previous run (used on resume)
+        self._cached_steps: dict[str, Any] = cached_steps or {}
+        self._step_index: int = 0
 
     # ------------------------------------------------------------------
     # Budget helper
@@ -122,26 +176,57 @@ class WorkflowContext:
         *,
         requires_approval: bool = False,
         timeout: float | None = None,
-    ) -> AsyncIterator[None]:
-        """Mark an explicit step boundary (reserved for durable mode — PR 29).
+    ) -> AsyncIterator[_StepResult]:
+        """Mark an explicit step boundary.
 
-        In non-durable mode this is a transparent pass-through: the block runs
-        normally and the step name is recorded for introspection.
+        Yields a :class:`_StepResult` object.  In durable mode, if this step
+        was already completed in a prior run, ``step.is_cached`` is ``True``
+        and ``step.value`` contains the previously stored result — allowing
+        expensive calls to be skipped::
+
+            async with Workflow.step("research") as step:
+                if not step.is_cached:
+                    r = await researcher.arun(topic)
+                    step.set(r.output)       # persist for future resumes
+                result = step.value
+
+        In non-durable mode the block always executes; ``step.is_cached`` is
+        always ``False``.
 
         Args:
-            name: Unique step name within the workflow.
-            requires_approval: (durable only) Pause for human approval.
-            timeout: (durable only) Per-step timeout in seconds.
+            name:              Unique step name within the workflow run.
+            requires_approval: When ``True`` (durable mode only), the step is
+                               saved with ``status="pending_approval"`` before
+                               execution so a HITL system can gate the run.
+            timeout:           Reserved for future step-level timeout support.
         """
-        if self._durable:
-            raise NotImplementedError(
-                "Durable workflows are not yet supported (PR 29). "
-                "Use @Workflow(durable=False) or omit the durable= keyword."
-            )
+        self._step_index += 1
+        is_cached = self._durable and name in self._cached_steps
+        cached_value = self._cached_steps.get(name) if is_cached else None
+        sr = _StepResult(cached_value=cached_value, is_cached=is_cached)
+
+        if is_cached:
+            self._skipped_steps.append(name)
+
         try:
-            yield
+            yield sr
+        except Exception:
+            raise
         finally:
-            self._completed_steps.append(name)
+            if not is_cached:
+                self._completed_steps.append(name)
+                # Persist step result to checkpointer (durable mode only)
+                if self._durable and self._checkpointer is not None:
+                    step_status = "pending_approval" if requires_approval else "completed"
+                    result_to_save = sr.value
+                    await self._checkpointer.save_step(
+                        thread_id=self._thread_id,
+                        step_name=name,
+                        step_index=self._step_index,
+                        result=result_to_save,
+                        status=step_status,
+                    )
+                    self._step_results[name] = result_to_save
 
     async def parallel(self, *coros: Any) -> list[Any]:
         """Run multiple coroutines concurrently.

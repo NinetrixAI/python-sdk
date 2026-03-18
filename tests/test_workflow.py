@@ -276,11 +276,12 @@ async def test_ctx_step_records_name():
 
 
 @pytest.mark.asyncio
-async def test_ctx_step_durable_raises_not_implemented():
+async def test_ctx_step_durable_records_completed():
+    """Durable step without a checkpointer records step as completed."""
     ctx = WorkflowContext("t1", durable=True)
-    with pytest.raises(NotImplementedError):
-        async with ctx.step("research"):
-            pass
+    async with ctx.step("research"):
+        pass
+    assert "research" in ctx._completed_steps
 
 
 # =============================================================================
