@@ -174,6 +174,11 @@ class AgentRunner:
         thread_id = thread_id or uuid.uuid4().hex[:16]
         self._budget.reset()
 
+        await self._emit("run.start", thread_id, {
+            "agent_name": self.config.name,
+            "model": self.config.model,
+        })
+
         # ── Restore prior history ──────────────────────────────────────
         restored: list[dict] = []
         if prior_history is not None:
@@ -206,6 +211,8 @@ class AgentRunner:
         for turn in range(self.config.max_turns):
             trimmed = history.trim()
 
+            await self._emit("turn.start", thread_id, {"turn": turn})
+
             response = await self.provider.complete(
                 trimmed,
                 tools,
@@ -228,10 +235,22 @@ class AgentRunner:
             # No tool calls → stop turn
             if not response.tool_calls:
                 final_content = response.content or ""
+                await self._emit("turn.end", thread_id, {
+                    "turn": turn,
+                    "content": final_content,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
+                })
                 break
 
             # Dispatch tool calls
             for tc in response.tool_calls:
+                await self._emit("tool.call", thread_id, {
+                    "tool_name": tc.name,
+                    "tool_call_id": tc.id,
+                    "arguments": tc.arguments,
+                    "turn": turn,
+                })
                 result_str = await _dispatch_tool(
                     dispatcher=self.dispatcher,
                     tool_call=tc,
@@ -241,6 +260,12 @@ class AgentRunner:
                     extra_context=tool_context,
                     timeout=self.config.tool_timeout,
                 )
+                await self._emit("tool.result", thread_id, {
+                    "tool_name": tc.name,
+                    "tool_call_id": tc.id,
+                    "result": result_str,
+                    "turn": turn,
+                })
                 history.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -274,6 +299,13 @@ class AgentRunner:
                 tokens_used=usage.total_tokens,
             )
 
+        await self._emit("run.end", thread_id, {
+            "agent_name": self.config.name,
+            "tokens_used": usage.total_tokens,
+            "cost_usd": usage.cost_usd,
+            "steps": steps,
+        })
+
         return AgentResult(
             output=parsed_output,
             thread_id=thread_id,
@@ -284,6 +316,29 @@ class AgentRunner:
             steps=steps,
             history=final_history,
         )
+
+    # ------------------------------------------------------------------
+    # Event emission helper
+    # ------------------------------------------------------------------
+
+    async def _emit(self, event_type: str, thread_id: str, data: dict) -> None:
+        """Emit a lifecycle event if an event_bus is configured.
+
+        Never raises — event handler errors are silently swallowed so they
+        cannot interrupt the agent run.
+        """
+        if self.event_bus is None:
+            return
+        try:
+            from ninetrix.observability.events import AgentEvent
+            await self.event_bus.emit(AgentEvent(
+                type=event_type,
+                thread_id=thread_id,
+                agent_name=self.config.name,
+                data=data,
+            ))
+        except Exception:
+            pass  # hook errors must never crash the agent
 
     # ------------------------------------------------------------------
     # Structured output parse + retry

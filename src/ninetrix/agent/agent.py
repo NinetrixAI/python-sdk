@@ -28,6 +28,7 @@ from ninetrix._internals.types import (
 )
 from ninetrix.agent.config import AgentConfig, MCPConfig, ThinkingConfig, VerifierConfig
 from ninetrix.agent.introspection import AgentInfo, DryRunResult, ValidationIssue
+from ninetrix.observability.hooks import HooksMixin
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ def _estimate_price(model: str) -> float:
 # ---------------------------------------------------------------------------
 
 
-class Agent(Generic[T_Output]):
+class Agent(HooksMixin, Generic[T_Output]):
     """The primary user-facing entry point for running AI agents.
 
     ``Agent`` is a thin shell that holds :class:`~ninetrix.agent.config.AgentConfig`
@@ -165,6 +166,7 @@ class Agent(Generic[T_Output]):
         runner_token: str = "",
         history_max_tokens: int = 128_000,
     ) -> None:
+        super().__init__()  # initialises HooksMixin._event_bus
         self.config = AgentConfig(
             name=name,
             provider=provider,
@@ -491,6 +493,7 @@ class Agent(Generic[T_Output]):
             dispatcher=dispatcher,
             config=runner_config,
             checkpointer=checkpointer,
+            event_bus=self._event_bus,
         )
 
     def _build_provider(self, provider: str, api_key: str, model: str) -> Any:

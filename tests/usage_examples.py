@@ -383,23 +383,26 @@ print("✓ PR 19: YAML round-trip (to_yaml / from_yaml)")
 # PR 20 — Events + Hooks
 # =============================================================================
 
-# Uncomment when PR 18 lands:
-#
-# from ninetrix import Agent
-# agent = Agent(provider="anthropic", model="claude-sonnet-4-6", tools=[get_price])
-# fired_events = []
-#
-# @agent.on("tool.call")
-# async def on_tool(event):
-#     fired_events.append(event.type)
-#
-# @agent.on("*")
-# async def on_all(event):
-#     pass   # wildcard
-#
-# # result = agent.run("Get AAPL price")
-# # assert "tool.call" in fired_events
-# print("✓ PR 18: Events + Hooks")
+from ninetrix import Agent, AgentEvent, EventBus, HooksMixin
+
+_bus = EventBus()
+_log: list[str] = []
+_bus.subscribe("run.start", lambda e: _log.append("run.start"))
+_bus.subscribe("tool.*", lambda e: _log.append(e.type))
+_bus.subscribe("*", lambda e: None)  # global wildcard
+
+_agent_hooks = Agent(provider="anthropic")
+_fired: list[str] = []
+
+@_agent_hooks.on("run.end")
+def _on_end(event: AgentEvent):
+    _fired.append(event.type)
+
+assert callable(_agent_hooks.on)
+assert callable(_agent_hooks.off)
+assert callable(_agent_hooks.once)
+assert isinstance(_agent_hooks._event_bus, EventBus)
+print("✓ PR 20: Events + Hooks")
 
 
 # =============================================================================

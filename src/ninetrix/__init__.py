@@ -65,6 +65,11 @@ from ninetrix.observability.errors import (
     ErrorContext as ErrorContext,
     error_context as error_context,
 )
+from ninetrix.observability.events import (
+    AgentEvent as AgentEvent,
+    EventBus as EventBus,
+)
+from ninetrix.observability.hooks import HooksMixin as HooksMixin
 from ninetrix._internals.tenant import (
     TenantContext as TenantContext,
     set_tenant as set_tenant,
@@ -159,6 +164,10 @@ __all__ = [
     "get_tenant",
     "require_tenant",
     "tenant_scope",
+    # PR 20 — EventBus + HooksMixin
+    "AgentEvent",
+    "EventBus",
+    "HooksMixin",
     # PR 9 — ErrorContext
     "ErrorContext",
     "error_context",
