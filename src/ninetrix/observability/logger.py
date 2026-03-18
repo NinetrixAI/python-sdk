@@ -125,6 +125,10 @@ def _ensure_handler() -> None:
     level = getattr(logging, env_level, logging.WARNING)
     root.setLevel(level)
 
+    # NINETRIX_DEBUG=1 is a shortcut for NINETRIX_LOG_LEVEL=DEBUG
+    if os.environ.get("NINETRIX_DEBUG", "").strip() in ("1", "true", "on", "yes"):
+        root.setLevel(logging.DEBUG)
+
     _handler_installed = True
 
 
@@ -281,17 +285,32 @@ class NinetrixLogger:
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
-def enable_debug() -> None:
+def enable_debug(agent: Any = None) -> None:
     """
     Set the root ninetrix logger to DEBUG level.
+
+    Optionally attach the pretty-printer debug listener to *agent*'s event bus.
 
     Call once at app startup to see per-turn, per-tool, per-token logs::
 
         from ninetrix.observability.logger import enable_debug
         enable_debug()
+
+    With a specific agent for pretty-printed lifecycle events::
+
+        from ninetrix import Agent, enable_debug
+        agent = Agent(...)
+        enable_debug(agent=agent)
+
+    Args:
+        agent: Optional agent instance.  When provided, subscribes the
+               debug pretty-printer to the agent's ``_event_bus``.
     """
     _ensure_handler()
     logging.getLogger(_ROOT_LOGGER_NAME).setLevel(logging.DEBUG)
+    if agent is not None:
+        from ninetrix.observability.debug import attach_debug_listener
+        attach_debug_listener(agent._event_bus)
 
 
 def get_logger(name: str) -> NinetrixLogger:

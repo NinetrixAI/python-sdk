@@ -20,9 +20,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+_log = logging.getLogger("ninetrix.runtime.runner")
+
+
+def _truncate(d: dict, max_len: int = 200) -> str:
+    s = str(d)
+    return s if len(s) <= max_len else s[:max_len] + "…"
 
 from ninetrix._internals.types import (
     AgentResult,
@@ -225,6 +233,10 @@ class AgentRunner:
                 history.append({"role": "user", "content": message})
 
         # ── Agentic loop ───────────────────────────────────────────────
+        _log.debug(
+            f"run.start agent={self.config.name} model={self.config.model} "
+            f"thread_id={thread_id} tools={len(tools)}"
+        )
         final_content = ""
         steps = 0
 
@@ -232,6 +244,7 @@ class AgentRunner:
             trimmed = history.trim()
 
             await self._emit("turn.start", thread_id, {"turn": turn})
+            _log.debug(f"turn agent={self.config.name} turn={turn} thread_id={thread_id}")
 
             response = await self.provider.complete(
                 trimmed,
@@ -261,6 +274,11 @@ class AgentRunner:
                     "input_tokens": response.input_tokens,
                     "output_tokens": response.output_tokens,
                 })
+                _log.debug(
+                    f"turn.end agent={self.config.name} turn={turn} "
+                    f"in_tokens={response.input_tokens} out_tokens={response.output_tokens} "
+                    f"thread_id={thread_id}"
+                )
                 break
 
             # Dispatch tool calls
@@ -271,6 +289,10 @@ class AgentRunner:
                     "arguments": tc.arguments,
                     "turn": turn,
                 })
+                _log.debug(
+                    f"tool.call agent={self.config.name} tool={tc.name} "
+                    f"args={_truncate(tc.arguments)} thread_id={thread_id}"
+                )
                 result_str = await _dispatch_tool(
                     dispatcher=self.dispatcher,
                     tool_call=tc,
@@ -279,6 +301,10 @@ class AgentRunner:
                     turn_index=turn,
                     extra_context=tool_context,
                     timeout=self.config.tool_timeout,
+                )
+                _log.debug(
+                    f"tool.result agent={self.config.name} tool={tc.name} "
+                    f"preview={result_str[:120]} thread_id={thread_id}"
                 )
                 await self._emit("tool.result", thread_id, {
                     "tool_name": tc.name,
@@ -325,6 +351,10 @@ class AgentRunner:
             "cost_usd": usage.cost_usd,
             "steps": steps,
         })
+        _log.debug(
+            f"run.end agent={self.config.name} turns={steps} tokens={usage.total_tokens} "
+            f"cost_usd={round(usage.cost_usd, 6)} thread_id={thread_id}"
+        )
 
         return AgentResult(
             output=parsed_output,

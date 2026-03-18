@@ -6,7 +6,21 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 30** — `testing/` MockTool + AgentSandbox
+**ALL 32 PRs COMPLETE — SDK v0.1.0 ready for release**
+
+**PR 32 done:** `agent/server.py` + `Agent.serve()` / `Agent.build()` / `Agent.deploy()` — FastAPI HTTP server, CLI subprocess build, Cloud deploy
+**PR 31 done:** `observability/otel.py` — OpenTelemetry integration, graceful no-op when sdk absent, `configure_otel()`, `attach_otel_to_bus()`
+**PR 30 done:** `testing/` — `MockTool`, `AgentSandbox`, `MockProvider`, `SandboxedDispatcher`, `SandboxResult`
+**PR 29 done:** `workflow/workflow.py` durable=True — step-level checkpointing + resume
+**PR 28 done:** `checkpoint/postgres.py` — PostgresCheckpointer with SELECT FOR UPDATE
+**PR 27 done:** `tools/toolkit.py` — Toolkit grouping
+**PR 26 done:** `workflow/team.py` — LLM-based dynamic routing Team
+**PR 25 done:** `workflow/context.py` + `workflow/workflow.py` — @Workflow decorator, WorkflowRunner, WorkflowBudgetTracker
+**PR 24 done:** `runtime/planner.py` — plan-then-execute mode
+**PR 23 done:** `runtime/dispatcher.py` — MCPToolSource + ComposioToolSource
+**PR 22 done:** `client/local.py` + `client/remote.py` — AgentClient + RemoteAgent (full AgentProtocol polymorphism)
+**PR 21 done:** `runtime/streaming.py` + `observability/streaming.py` + `Agent.stream()`
+**PR 20 done:** `observability/events.py` + `observability/hooks.py` — EventBus, HooksMixin
 **PR 19 done:** `export/writer.py` + `export/loader.py` — agent_to_yaml, load_agent_from_yaml, Agent.to_yaml/from_yaml
 **PR 18 done:** `agent/config.py` + `agent/agent.py` + `agent/introspection.py` — Agent, AgentConfig, info/validate/dry_run
 **PR 17 done:** `checkpoint/base.py` + `checkpoint/memory.py` — Checkpointer ABC + InMemoryCheckpointer
@@ -26,7 +40,9 @@ Read this at the start of every session before touching any code.
 **Phase 1 done:** `@Tool` decorator (`tool.py`, `registry.py`, `schema.py`, `discover.py`)
 **Full plan:** `../plans/sdk-phase-2-3-full-architecture.md`
 
-Update "Current PR" here after every session.
+**Security fixes applied (post-PR-32):**
+- `repr=False` on `TenantContext.api_key`, `NinetrixConfig.api_key`, `NinetrixConfig.runner_token`
+- `async with get_http_client()` replaced with direct calls in all 3 sites (was silently destroying the singleton)
 
 ---
 
@@ -143,9 +159,9 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 27 | `tools/toolkit.py` | | ✅ |
 | 28 | `checkpoint/postgres.py` | + SELECT FOR UPDATE | ✅ |
 | 29 | `workflow/workflow.py` durable=True | | ✅ |
-| 30 | `testing/` | MockTool, AgentSandbox (+ tenant= param), replay, assertions | ⬜ |
-| 31 | `observability/otel.py` | | ⬜ |
-| 32 | `agent.serve()` + `agent.build()` + `agent.deploy()` | | ⬜ |
+| 30 | `testing/` | MockTool, AgentSandbox, MockProvider, SandboxedDispatcher, SandboxResult | ✅ |
+| 31 | `observability/otel.py` | configure_otel, attach_otel_to_bus, graceful no-op without sdk | ✅ |
+| 32 | `agent/server.py` + `Agent.serve/build/deploy` | FastAPI server, CLI subprocess build, Cloud deploy | ✅ |
 
 ---
 

@@ -109,6 +109,7 @@ from ninetrix.observability.otel import (
     get_tracer as get_tracer,
     attach_otel_to_bus as attach_otel_to_bus,
 )
+from ninetrix.observability.debug import attach_debug_listener as attach_debug_listener
 from ninetrix.agent.server import serve_agent as serve_agent
 from ninetrix.runtime.dispatcher import (
     ToolSource as ToolSource,
@@ -152,6 +153,8 @@ __version__ = "0.1.0"
 __all__ = [
     # PR 32 — serve / build / deploy lifecycle methods
     "serve_agent",
+    # PR 33 — debug pretty-printer
+    "attach_debug_listener",
     # PR 31 — OpenTelemetry integration
     "configure_otel",
     "get_tracer",

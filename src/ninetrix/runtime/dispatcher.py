@@ -14,10 +14,18 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import os
 import warnings
 from abc import ABC, abstractmethod
 from typing import Any
+
+_log = logging.getLogger("ninetrix.runtime.dispatcher")
+
+
+def _truncate(d: dict, max_len: int = 200) -> str:
+    s = str(d)
+    return s if len(s) <= max_len else s[:max_len] + "…"
 
 from ninetrix.registry import ToolDef
 from ninetrix._internals.types import ToolError
@@ -156,6 +164,7 @@ class LocalToolSource(ToolSource):
             )
             kwargs[ctx_param] = ctx
 
+        _log.debug(f"dispatch tool={tool_name} source=local args={_truncate(arguments)}")
         try:
             if inspect.iscoroutinefunction(td.fn):
                 result = await td.fn(**kwargs)
@@ -168,7 +177,9 @@ class LocalToolSource(ToolSource):
                 "Fix: check the tool implementation or the arguments passed."
             ) from exc
 
-        return str(result) if result is not None else "(done)"
+        result_str = str(result) if result is not None else "(done)"
+        _log.debug(f"tool={tool_name} result={result_str[:120]}")
+        return result_str
 
 
 def _find_context_param(fn: Any) -> str | None:
@@ -399,6 +410,7 @@ class MCPToolSource(ToolSource):
 
     async def call(self, tool_name: str, arguments: dict[str, Any]) -> str:
         """Dispatch a tool call via ``tools/call`` JSON-RPC."""
+        _log.debug(f"dispatch tool={tool_name} source=mcp")
         payload = {
             "jsonrpc": "2.0",
             "id": self._next_id(),
@@ -552,6 +564,7 @@ class ComposioToolSource(ToolSource):
 
     async def call(self, tool_name: str, arguments: dict[str, Any]) -> str:
         """Execute a Composio action via the SDK."""
+        _log.debug(f"dispatch tool={tool_name} source=composio")
         if self._toolset is None:
             raise ToolError(
                 f"Composio tool '{tool_name}' cannot be called.\n"

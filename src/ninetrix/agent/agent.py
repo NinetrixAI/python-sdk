@@ -568,13 +568,20 @@ class Agent(HooksMixin, Generic[T_Output]):
             execution_mode=cfg.execution_mode,
         )
 
-        return AgentRunner(
+        runner = AgentRunner(
             provider=provider,
             dispatcher=dispatcher,
             config=runner_config,
             checkpointer=checkpointer,
             event_bus=self._event_bus,
         )
+
+        # Auto-attach OTEL if configure_otel() was called anywhere in the process
+        from ninetrix.observability.otel import _otel_configured, attach_otel_to_bus
+        if _otel_configured:
+            attach_otel_to_bus(self._event_bus)
+
+        return runner
 
     def _build_provider(self, provider: str, api_key: str, model: str) -> Any:
         """Instantiate the correct LLM provider adapter."""

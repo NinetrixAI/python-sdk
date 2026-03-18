@@ -47,6 +47,9 @@ from typing import Any, Optional
 _HAS_OTEL = False
 _configured = False
 
+# Public alias — checked by Agent._build_runner() to auto-attach OTEL
+_otel_configured: bool = False
+
 try:
     import opentelemetry.trace as _otel_trace  # type: ignore[import]
     from opentelemetry.trace import SpanKind, StatusCode  # type: ignore[import]
@@ -146,7 +149,7 @@ def configure_otel(
             headers={"Authorization": "Bearer token"},
         )
     """
-    global _configured
+    global _configured, _otel_configured
 
     if not _HAS_OTEL:
         import warnings
@@ -189,6 +192,7 @@ def configure_otel(
         provider.add_span_processor(BatchSpanProcessor(exporter))
         trace.set_tracer_provider(provider)
         _configured = True
+        _otel_configured = True
 
     except ImportError as exc:
         import warnings
