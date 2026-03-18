@@ -266,17 +266,16 @@ print("✓ PR 14: MessageHistory + BudgetTracker")
 # PR 14 — ToolDispatcher (local)
 # =============================================================================
 
-# Uncomment when PR 14 lands:
-#
-# import asyncio
-# from ninetrix.runtime.dispatcher import ToolDispatcher, LocalToolSource
-# from ninetrix.registry import ToolRegistry
-# defs = ToolRegistry.all()
-# source = LocalToolSource(defs)
-# dispatcher = ToolDispatcher([source])
-# result = asyncio.run(dispatcher.call("get_price", {"ticker": "AAPL"}))
-# assert "150" in result
-# print("✓ PR 14: ToolDispatcher (local)")
+import asyncio as _asyncio
+from ninetrix.runtime.dispatcher import ToolDispatcher, LocalToolSource
+from ninetrix.registry import _registry as _reg
+
+_defs = _reg.all()
+_source = LocalToolSource(_defs)
+_dispatcher = ToolDispatcher([_source])
+_result = _asyncio.run(_dispatcher.call("get_price", {"ticker": "AAPL"}))
+assert "150" in _result
+print("✓ PR 15: ToolDispatcher (local)")
 
 
 # =============================================================================

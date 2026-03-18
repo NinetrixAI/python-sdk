@@ -151,6 +151,11 @@ def build_parameters_schema(
             continue
 
         annotation = hints.get(param_name, inspect.Parameter.empty)
+
+        # Skip ToolContext-annotated parameters — injected at runtime, not by LLM.
+        # Detected by marker attribute to avoid importing ToolContext here (circular).
+        if getattr(annotation, "_is_tool_context", False):
+            continue
         prop = type_to_json_schema(annotation)
 
         # Inject parameter description from docstring

@@ -26,7 +26,11 @@ from typing import AsyncIterator
 
 import httpx
 
-from ninetrix import __version__
+try:
+    import importlib.metadata as _meta
+    _SDK_VERSION = _meta.version("ninetrix-sdk")
+except Exception:
+    _SDK_VERSION = "0.0.0"
 
 # ---------------------------------------------------------------------------
 # Singleton state
@@ -43,8 +47,8 @@ _LIMITS = httpx.Limits(
 )
 
 _DEFAULT_HEADERS = {
-    "User-Agent": f"ninetrix-sdk/{__version__} python-httpx/{httpx.__version__}",
-    "X-Ninetrix-SDK-Version": __version__,
+    "User-Agent": f"ninetrix-sdk/{_SDK_VERSION} python-httpx/{httpx.__version__}",
+    "X-Ninetrix-SDK-Version": _SDK_VERSION,
 }
 
 _DEFAULT_TIMEOUT = httpx.Timeout(

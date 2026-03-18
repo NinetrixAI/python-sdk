@@ -6,7 +6,8 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 15** — `tools/context.py` + `runtime/dispatcher.py` (skipped MW 10-12)
+**Current PR: 16** — `runtime/runner.py` (direct mode + structured output) (skipped MW 10-12)
+**PR 15 done:** `tools/context.py` + `runtime/dispatcher.py` — ToolContext, LocalToolSource, RegistryToolSource, ToolDispatcher
 **PR 14 done:** `runtime/history.py` + `runtime/budget.py` — MessageHistory, BudgetTracker, BudgetUsage
 **PR 13 done:** `_internals/tenant.py` — TenantContext, set_tenant, get_tenant, require_tenant, tenant_scope
 **PR 9 done:** `observability/errors.py` — ErrorContext, error_context
@@ -123,7 +124,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 12 | `middleware/tools.py` | | ⬜ |
 | **13** | **`_internals/tenant.py`** | **TenantContext + set_tenant + tenant_scope — NEW** | ✅ |
 | 14 | `runtime/history.py` + `runtime/budget.py` | | ✅ |
-| 15 | `tools/context.py` + `runtime/dispatcher.py` | Local + **RegistryToolSource** (lazy skill loading) | ⬜ |
+| 15 | `tools/context.py` + `runtime/dispatcher.py` | Local + **RegistryToolSource** (lazy skill loading) | ✅ |
 | 16 | `runtime/runner.py` | Direct mode + structured output | ⬜ |
 | 17 | `checkpoint/base.py` + `checkpoint/memory.py` | | ⬜ |
 | 18 | `agent/config.py` + `agent/agent.py` + `agent/introspection.py` | `_build_runner()`, validate/dry_run/info | ⬜ |
