@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import AsyncGenerator
 
 from ninetrix._internals.types import ConfigurationError
@@ -73,7 +73,7 @@ class TenantContext:
 
     workspace_id: str
     org_id: str = ""
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)  # never printed; prevents log leakage
     region: str = "us"
     db_schema: str = "public"
 

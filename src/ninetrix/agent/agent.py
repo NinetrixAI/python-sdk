@@ -862,20 +862,20 @@ class Agent(HooksMixin, Generic[T_Output]):
         yaml_str = self.to_yaml()
         api_base = os.environ.get("NINETRIX_API_URL", "https://api.ninetrix.io")
 
-        async with get_http_client() as client:
-            resp = await client.post(
-                f"{api_base}/v1/deployments",
-                json={
-                    "yaml": yaml_str,
-                    "agent_name": self.config.name,
-                    "region": region,
-                },
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "X-Workspace-ID": workspace_id,
-                },
-                timeout=60.0,
-            )
+        client = get_http_client()
+        resp = await client.post(
+            f"{api_base}/v1/deployments",
+            json={
+                "yaml": yaml_str,
+                "agent_name": self.config.name,
+                "region": region,
+            },
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "X-Workspace-ID": workspace_id,
+            },
+            timeout=60.0,
+        )
 
         if resp.status_code >= 400:
             raise CredentialError(

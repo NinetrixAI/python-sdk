@@ -250,14 +250,14 @@ class RegistryToolSource(ToolSource):
         if tenant:
             headers["X-Workspace-ID"] = tenant.workspace_id
 
-        async with get_http_client() as client:
-            resp = await client.post(
-                f"{self._registry_url}/v1/skills/schemas",
-                json={"skills": self._skills},
-                headers=headers,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_http_client()
+        resp = await client.post(
+            f"{self._registry_url}/v1/skills/schemas",
+            json={"skills": self._skills},
+            headers=headers,
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
         self._schemas = data.get("schemas", [])
         self._skill_names = {
@@ -277,13 +277,13 @@ class RegistryToolSource(ToolSource):
         if tenant:
             headers["X-Workspace-ID"] = tenant.workspace_id
 
-        async with get_http_client() as client:
-            resp = await client.post(
-                f"{self._registry_url}/v1/skills/call",
-                json={"skill": tool_name, "arguments": arguments},
-                headers=headers,
-                timeout=60.0,
-            )
+        client = get_http_client()
+        resp = await client.post(
+            f"{self._registry_url}/v1/skills/call",
+            json={"skill": tool_name, "arguments": arguments},
+            headers=headers,
+            timeout=60.0,
+        )
 
         if resp.status_code >= 400:
             raise ToolError(

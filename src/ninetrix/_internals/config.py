@@ -92,10 +92,10 @@ class NinetrixConfig:
     default_temperature: float = 0.0
 
     api_url: str = ""
-    runner_token: str = ""
+    runner_token: str = field(default="", repr=False)  # never printed; prevents log leakage
     mcp_gateway_url: str = ""
     workspace_id: str = ""
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)  # never printed; prevents log leakage
 
     telemetry_enabled: bool = True
     debug: bool = False

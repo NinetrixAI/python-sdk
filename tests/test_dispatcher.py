@@ -415,11 +415,8 @@ async def test_registry_source_initialize():
 
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
-    mock_ctx_manager = AsyncMock()
-    mock_ctx_manager.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_ctx_manager.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_ctx_manager):
+    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
         await source.initialize()
 
     assert source.handles("web_search") is True
@@ -451,11 +448,8 @@ async def test_registry_source_call():
 
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
-    mock_ctx_manager = AsyncMock()
-    mock_ctx_manager.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_ctx_manager.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_ctx_manager):
+    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
         result = await source.call("web_search", {"query": "capital of France"})
 
     assert result == "Paris is the capital of France"
@@ -475,10 +469,7 @@ async def test_registry_source_call_http_error_raises_tool_error():
 
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
-    mock_ctx_manager = AsyncMock()
-    mock_ctx_manager.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_ctx_manager.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_ctx_manager):
+    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
         with pytest.raises(ToolError, match="HTTP 500"):
             await source.call("web_search", {"query": "test"})

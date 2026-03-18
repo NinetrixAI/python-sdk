@@ -10,12 +10,13 @@ MCPToolSource, telemetry) share this single client.
 Usage:
     from ninetrix._internals.http import get_http_client, close_http_client
 
-    async with get_http_client() as client:
-        resp = await client.post(url, json=payload)
-
-    # Or call without context manager (singleton is kept open):
+    # Correct — use the client directly (singleton stays open):
     client = get_http_client()
     resp = await client.post(url, json=payload)
+
+    # WARNING: do NOT use `async with get_http_client() as client:` — httpx's
+    # __aexit__ closes the client, destroying the connection pool.
+    # Use http_client_lifespan() if you need a managed close-on-exit context.
 """
 
 from __future__ import annotations
