@@ -6,7 +6,7 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 26** — `workflow/team.py`
+**Current PR: 27** — `tools/toolkit.py`
 **PR 19 done:** `export/writer.py` + `export/loader.py` — agent_to_yaml, load_agent_from_yaml, Agent.to_yaml/from_yaml
 **PR 18 done:** `agent/config.py` + `agent/agent.py` + `agent/introspection.py` — Agent, AgentConfig, info/validate/dry_run
 **PR 17 done:** `checkpoint/base.py` + `checkpoint/memory.py` — Checkpointer ABC + InMemoryCheckpointer
@@ -139,7 +139,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 23 | `runtime/dispatcher.py` | MCP + Composio | ✅ |
 | 24 | `runtime/planner.py` | | ✅ |
 | 25 | `workflow/context.py` + `workflow/workflow.py` | Sequential/parallel/fan_out/branch + WorkflowBudgetTracker | ✅ |
-| 26 | `workflow/team.py` | Accepts `list[AgentProtocol]` | ⬜ |
+| 26 | `workflow/team.py` | Accepts `list[AgentProtocol]` | ✅ |
 | 27 | `tools/toolkit.py` | | ⬜ |
 | 28 | `checkpoint/postgres.py` | + SELECT FOR UPDATE | ⬜ |
 | 29 | `workflow/workflow.py` durable=True | | ⬜ |

@@ -86,6 +86,7 @@ from ninetrix.runtime.runner import AgentRunner as AgentRunner, RunnerConfig as 
 from ninetrix.runtime.planner import Planner as Planner
 from ninetrix.workflow.context import WorkflowContext as WorkflowContext, WorkflowBudgetTracker as WorkflowBudgetTracker
 from ninetrix.workflow.workflow import Workflow as Workflow, WorkflowRunner as WorkflowRunner
+from ninetrix.workflow.team import Team as Team, TeamResult as TeamResult
 from ninetrix.checkpoint.base import Checkpointer as Checkpointer
 from ninetrix.checkpoint.memory import InMemoryCheckpointer as InMemoryCheckpointer
 from ninetrix.agent.config import AgentConfig as AgentConfig
@@ -153,6 +154,9 @@ __all__ = [
     # PR 17 — Checkpointer + InMemoryCheckpointer
     "Checkpointer",
     "InMemoryCheckpointer",
+    # PR 26 — Team + TeamResult
+    "Team",
+    "TeamResult",
     # PR 25 — Workflow + WorkflowContext + WorkflowBudgetTracker
     "Workflow",
     "WorkflowRunner",

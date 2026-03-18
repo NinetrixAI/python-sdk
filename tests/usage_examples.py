@@ -590,6 +590,37 @@ print("✓ PR 25: Workflow + WorkflowBudgetTracker")
 
 
 # =============================================================================
+# PR 26 — Team (LLM-based dynamic routing)
+# =============================================================================
+
+from ninetrix import Team, TeamResult
+
+assert Team is not None
+assert TeamResult is not None
+
+# Construction
+_billing = type("A", (), {
+    "config": type("C", (), {"name": "billing", "description": "billing agent"})(),
+    "arun": None,
+})()
+_support = type("A", (), {
+    "config": type("C", (), {"name": "support", "description": "support agent"})(),
+    "arun": None,
+})()
+_team = Team(agents=[_billing, _support], name="test-team")
+assert _team.name == "test-team"
+assert "billing" in _team._agents
+assert "support" in _team._agents
+
+# _parse_route
+assert _team._parse_route("billing") == "billing"
+assert _team._parse_route("support") == "support"
+assert _team._parse_route("no match at all") == "billing"   # falls back to first
+
+print("✓ PR 26: Team + TeamResult")
+
+
+# =============================================================================
 # PR 29 — Testing utilities
 # =============================================================================
 
