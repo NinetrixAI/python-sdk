@@ -4,19 +4,18 @@ runtime/dispatcher.py — routes tool calls to the correct source.
 Layer: L3 (runtime) — may import L1 (_internals), L2 (tools), stdlib only.
 
 Sources shipped in this module:
-  LocalToolSource   — @Tool-decorated Python functions (async-safe via asyncio.to_thread)
+  LocalToolSource    — @Tool-decorated Python functions (async-safe via asyncio.to_thread)
   RegistryToolSource — Ninetrix Skill Registry (lazy HTTP, proxied calls)
-
-Sources added in PR 23 (MCP + Composio):
-  MCPToolSource
-  ComposioToolSource
-  TransferToolSource
+  MCPToolSource      — Ninetrix MCP Gateway (JSON-RPC 2.0, PR 23)
+  ComposioToolSource — Composio SDK (conditional import, PR 23)
 """
 
 from __future__ import annotations
 
 import asyncio
 import inspect
+import os
+import warnings
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -295,6 +294,296 @@ class RegistryToolSource(ToolSource):
             )
 
         return resp.json().get("result", "")
+
+
+# ---------------------------------------------------------------------------
+# MCPToolSource
+# ---------------------------------------------------------------------------
+
+class MCPToolSource(ToolSource):
+    """Dispatches tool calls through the Ninetrix MCP Gateway.
+
+    Sends JSON-RPC 2.0 requests to ``POST /v1/mcp/{workspace_id}`` on the
+    gateway.  Tool schemas are fetched lazily at ``initialize()`` time and
+    converted from MCP format to OpenAI-compatible format.
+
+    Args:
+        gateway_url:  Base URL of the MCP gateway, e.g.
+                      ``"http://mcp-gateway:8080"``.
+        token:        Bearer token for gateway authentication.
+        workspace_id: Workspace identifier used in the URL path.
+
+    Example::
+
+        source = MCPToolSource(
+            gateway_url="http://mcp-gateway:8080",
+            token="dev-secret",
+            workspace_id="my-workspace",
+        )
+        dispatcher = ToolDispatcher([source])
+        await dispatcher.initialize()   # fetches tool schemas
+        result = await dispatcher.call("slack__send_message", {"text": "hi"})
+    """
+
+    def __init__(
+        self,
+        gateway_url: str,
+        token: str,
+        workspace_id: str,
+    ) -> None:
+        self._url = gateway_url.rstrip("/")
+        self._token = token
+        self._workspace_id = workspace_id
+        self._tool_schemas: list[dict] = []
+        self._tool_names: set[str] = set()
+        self._req_id = 0
+
+    def _next_id(self) -> int:
+        self._req_id += 1
+        return self._req_id
+
+    async def initialize(self) -> None:
+        """Fetch tool schemas from the MCP Gateway via ``tools/list``."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/list",
+            "params": {},
+        }
+        client = get_http_client()
+        resp = await client.post(
+            f"{self._url}/v1/mcp/{self._workspace_id}",
+            json=payload,
+            headers={"Authorization": f"Bearer {self._token}"},
+            timeout=30.0,
+        )
+        if resp.status_code >= 400:
+            raise ToolError(
+                f"MCPToolSource: tools/list failed with HTTP {resp.status_code}.\n"
+                f"  URL: {self._url}/v1/mcp/{self._workspace_id}\n"
+                f"  Response: {resp.text[:200]}\n"
+                "  Fix: check gateway_url, token, and workspace_id."
+            )
+
+        data = resp.json()
+        if "error" in data and data["error"]:
+            raise ToolError(
+                f"MCPToolSource: tools/list returned JSON-RPC error: "
+                f"{data['error'].get('message', data['error'])}.\n"
+                "  Fix: check that the MCP gateway is running and the token is valid."
+            )
+
+        tools = data.get("result", {}).get("tools", [])
+        # Convert MCP ToolSchema → OpenAI-compatible function-calling format
+        self._tool_schemas = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "parameters": t.get("inputSchema") or {
+                        "type": "object", "properties": {},
+                    },
+                },
+            }
+            for t in tools
+            if isinstance(t, dict) and t.get("name")
+        ]
+        self._tool_names = {t["name"] for t in tools if t.get("name")}
+
+    def tool_definitions(self) -> list[dict]:
+        return list(self._tool_schemas)
+
+    def handles(self, tool_name: str) -> bool:
+        return tool_name in self._tool_names
+
+    async def call(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        """Dispatch a tool call via ``tools/call`` JSON-RPC."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        }
+        client = get_http_client()
+        resp = await client.post(
+            f"{self._url}/v1/mcp/{self._workspace_id}",
+            json=payload,
+            headers={"Authorization": f"Bearer {self._token}"},
+            timeout=60.0,
+        )
+        if resp.status_code >= 400:
+            raise ToolError(
+                f"MCPToolSource: tools/call '{tool_name}' failed with "
+                f"HTTP {resp.status_code}.\n"
+                f"  Response: {resp.text[:200]}"
+            )
+
+        data = resp.json()
+        if "error" in data and data["error"]:
+            error = data["error"]
+            code = error.get("code", 0)
+            msg = error.get("message", str(error))
+            # -32010: integration not connected — include auth_url hint
+            auth_url = (error.get("data") or {}).get("auth_url", "")
+            hint = f"\n  Connect it at: {auth_url}" if auth_url else ""
+            raise ToolError(
+                f"MCP tool '{tool_name}' error (code {code}): {msg}.{hint}\n"
+                "  Fix: check tool name, arguments, and that the MCP worker is connected."
+            )
+
+        return _extract_mcp_result(data.get("result", ""))
+
+    def __repr__(self) -> str:
+        return (
+            f"MCPToolSource(gateway={self._url!r}, "
+            f"workspace={self._workspace_id!r}, "
+            f"tools={len(self._tool_names)})"
+        )
+
+
+def _extract_mcp_result(result: Any) -> str:
+    """Extract a plain string from an MCP tools/call result.
+
+    Handles:
+    - Standard MCP: ``{"content": [{"type": "text", "text": "..."}], ...}``
+    - Plain string
+    - Arbitrary dicts/values (str-converted)
+    """
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        content = result.get("content")
+        if content and isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(item.get("text", ""))
+                else:
+                    parts.append(str(item))
+            return "\n".join(parts) if parts else str(result)
+        if "result" in result:
+            return str(result["result"])
+    return str(result)
+
+
+# ---------------------------------------------------------------------------
+# ComposioToolSource
+# ---------------------------------------------------------------------------
+
+class ComposioToolSource(ToolSource):
+    """Dispatches tool calls via the Composio SDK.
+
+    Requires the ``composio-openai`` package::
+
+        pip install composio-openai
+
+    If the package is not installed, ``initialize()`` succeeds but returns no
+    schemas, and any ``call()`` attempt raises :exc:`~ninetrix.ToolError` with
+    an install hint.
+
+    Args:
+        apps:      List of Composio app names, e.g. ``["GITHUB", "SLACK"]``.
+        api_key:   Composio API key.  Falls back to the ``COMPOSIO_API_KEY``
+                   environment variable when not provided.
+        entity_id: Composio entity/user ID (default: ``"default"``).
+
+    Example::
+
+        source = ComposioToolSource(apps=["GITHUB"], api_key="comp_...")
+        dispatcher = ToolDispatcher([source])
+        await dispatcher.initialize()
+        result = await dispatcher.call("GITHUB_CREATE_ISSUE", {"title": "bug"})
+    """
+
+    def __init__(
+        self,
+        apps: list[str],
+        api_key: str = "",
+        entity_id: str = "default",
+    ) -> None:
+        self._apps = apps
+        self._api_key = api_key
+        self._entity_id = entity_id
+        self._tool_schemas: list[dict] = []
+        self._tool_names: set[str] = set()
+        self._toolset: Any = None
+
+    async def initialize(self) -> None:
+        """Load Composio tool schemas.  No-op if SDK is not installed."""
+        try:
+            from composio_openai import ComposioToolSet  # type: ignore[import-untyped]
+        except ImportError:
+            warnings.warn(
+                "ComposioToolSource: composio-openai is not installed. "
+                "Run: pip install composio-openai",
+                stacklevel=2,
+            )
+            return
+
+        key = self._api_key or os.environ.get("COMPOSIO_API_KEY", "") or None
+        self._toolset = ComposioToolSet(api_key=key, entity_id=self._entity_id)
+
+        try:
+            from composio import App  # type: ignore[import-untyped]
+            app_values = [App(a) for a in self._apps]
+        except Exception:
+            app_values = self._apps  # type: ignore[assignment]
+
+        try:
+            schemas = await asyncio.to_thread(
+                self._toolset.get_tools, apps=app_values
+            )
+            self._tool_schemas = schemas  # already OpenAI-compatible
+            self._tool_names = {
+                s["function"]["name"] for s in schemas if "function" in s
+            }
+        except Exception as exc:
+            warnings.warn(
+                f"ComposioToolSource: failed to load schemas for {self._apps}: {exc}",
+                stacklevel=2,
+            )
+
+    def tool_definitions(self) -> list[dict]:
+        return list(self._tool_schemas)
+
+    def handles(self, tool_name: str) -> bool:
+        return tool_name in self._tool_names
+
+    async def call(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        """Execute a Composio action via the SDK."""
+        if self._toolset is None:
+            raise ToolError(
+                f"Composio tool '{tool_name}' cannot be called.\n"
+                "  Why: composio-openai is not installed or initialize() was not called.\n"
+                "  Fix: pip install composio-openai, then await dispatcher.initialize()."
+            )
+
+        try:
+            from composio import Action  # type: ignore[import-untyped]
+            action = Action(tool_name)
+        except Exception:
+            action = tool_name  # type: ignore[assignment]
+
+        try:
+            result = await asyncio.to_thread(
+                self._toolset.execute_action,
+                action=action,
+                params=arguments,
+                entity_id=self._entity_id,
+            )
+            return str(result) if result is not None else "(done)"
+        except Exception as exc:
+            raise ToolError(
+                f"Composio tool '{tool_name}' failed: {type(exc).__name__}: {exc}.\n"
+                "  Fix: check the tool name, arguments, and your Composio API key."
+            ) from exc
+
+    def __repr__(self) -> str:
+        return (
+            f"ComposioToolSource(apps={self._apps!r}, "
+            f"tools={len(self._tool_names)})"
+        )
 
 
 # ---------------------------------------------------------------------------

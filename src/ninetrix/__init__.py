@@ -102,6 +102,8 @@ from ninetrix.runtime.dispatcher import (
     ToolDispatcher as ToolDispatcher,
     LocalToolSource as LocalToolSource,
     RegistryToolSource as RegistryToolSource,
+    MCPToolSource as MCPToolSource,
+    ComposioToolSource as ComposioToolSource,
 )
 from ninetrix.tools.context import ToolContext as ToolContext
 from ninetrix._internals.types import (
@@ -151,6 +153,9 @@ __all__ = [
     # PR 16 — AgentRunner + RunnerConfig
     "AgentRunner",
     "RunnerConfig",
+    # PR 23 — MCPToolSource + ComposioToolSource
+    "MCPToolSource",
+    "ComposioToolSource",
     # PR 15 — ToolDispatcher + ToolContext
     "ToolSource",
     "ToolDispatcher",

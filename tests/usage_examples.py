@@ -475,7 +475,24 @@ print("✓ PR 21: Streaming")
 
 
 # =============================================================================
-# PR 23 — Workflow (sequential + parallel)
+# PR 23 — MCPToolSource + ComposioToolSource
+# =============================================================================
+
+from ninetrix import MCPToolSource, ComposioToolSource
+from ninetrix.runtime.dispatcher import ToolDispatcher, _extract_mcp_result
+
+_mcp = MCPToolSource("http://mcp-gateway:8080", token="dev-secret", workspace_id="ws1")
+_composio = ComposioToolSource(apps=["GITHUB"], api_key="comp_test")
+assert _mcp.tool_definitions() == []      # not initialized yet
+assert _composio.tool_definitions() == []
+assert _extract_mcp_result({"content": [{"type": "text", "text": "ok"}]}) == "ok"
+_dispatcher = ToolDispatcher([_mcp, _composio])
+assert len(_dispatcher._sources) == 2
+print("✓ PR 23: MCPToolSource + ComposioToolSource")
+
+
+# =============================================================================
+# PR 23b — Workflow (sequential + parallel)
 # =============================================================================
 
 # Uncomment when PR 23 lands:

@@ -516,6 +516,26 @@ class Agent(HooksMixin, Generic[T_Output]):
                             tool_defs.append(td)
             sources.append(LocalToolSource(tool_defs))
 
+        # MCP tools — wire MCPToolSource when gateway_url is configured
+        if cfg.mcp_tools and cfg.mcp.gateway_url:
+            from ninetrix.runtime.dispatcher import MCPToolSource
+            mcp_token = cfg.mcp.token or nxt_config.mcp_gateway_token or ""
+            workspace = cfg.mcp.workspace_id or nxt_config.workspace_id or "default"
+            sources.append(MCPToolSource(
+                gateway_url=cfg.mcp.gateway_url,
+                token=mcp_token,
+                workspace_id=workspace,
+            ))
+
+        # Composio tools — wire ComposioToolSource when apps are listed
+        if cfg.composio_tools:
+            from ninetrix.runtime.dispatcher import ComposioToolSource
+            composio_key = creds.resolve("composio", explicit_key=None) or ""
+            sources.append(ComposioToolSource(
+                apps=list(cfg.composio_tools),
+                api_key=composio_key,
+            ))
+
         dispatcher = ToolDispatcher(sources)
         await dispatcher.initialize()
 
