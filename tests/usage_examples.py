@@ -663,6 +663,23 @@ print("✓ PR 27: Toolkit")
 
 
 # =============================================================================
+# PR 28 — PostgresCheckpointer (import + construction only; no real DB needed)
+# =============================================================================
+
+from ninetrix import PostgresCheckpointer
+from ninetrix.checkpoint.base import Checkpointer
+
+assert PostgresCheckpointer is not None
+assert issubclass(PostgresCheckpointer, Checkpointer)
+
+_pg = PostgresCheckpointer("postgresql://user:pass@localhost/db")
+assert _pg._conn is None      # not connected until .connect() is called
+assert _pg._db_url == "postgresql://user:pass@localhost/db"
+
+print("✓ PR 28: PostgresCheckpointer")
+
+
+# =============================================================================
 # PR 29 — Testing utilities
 # =============================================================================
 

@@ -90,6 +90,7 @@ from ninetrix.workflow.team import Team as Team, TeamResult as TeamResult
 from ninetrix.tools.toolkit import Toolkit as Toolkit
 from ninetrix.checkpoint.base import Checkpointer as Checkpointer
 from ninetrix.checkpoint.memory import InMemoryCheckpointer as InMemoryCheckpointer
+from ninetrix.checkpoint.postgres import PostgresCheckpointer as PostgresCheckpointer
 from ninetrix.agent.config import AgentConfig as AgentConfig
 from ninetrix.agent.introspection import (
     AgentInfo as AgentInfo,
@@ -152,6 +153,8 @@ __all__ = [
     "AgentInfo",
     "ValidationIssue",
     "DryRunResult",
+    # PR 28 — PostgresCheckpointer
+    "PostgresCheckpointer",
     # PR 17 — Checkpointer + InMemoryCheckpointer
     "Checkpointer",
     "InMemoryCheckpointer",
