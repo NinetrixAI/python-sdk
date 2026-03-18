@@ -103,6 +103,13 @@ from ninetrix.export.loader import (
     load_agent_from_yaml as load_agent_from_yaml,
     load_all_agents_from_yaml as load_all_agents_from_yaml,
 )
+from ninetrix.testing import MockTool as MockTool, AgentSandbox as AgentSandbox
+from ninetrix.observability.otel import (
+    configure_otel as configure_otel,
+    get_tracer as get_tracer,
+    attach_otel_to_bus as attach_otel_to_bus,
+)
+from ninetrix.agent.server import serve_agent as serve_agent
 from ninetrix.runtime.dispatcher import (
     ToolSource as ToolSource,
     ToolDispatcher as ToolDispatcher,
@@ -143,6 +150,15 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 32 — serve / build / deploy lifecycle methods
+    "serve_agent",
+    # PR 31 — OpenTelemetry integration
+    "configure_otel",
+    "get_tracer",
+    "attach_otel_to_bus",
+    # PR 30 — MockTool + AgentSandbox
+    "MockTool",
+    "AgentSandbox",
     # PR 19 — YAML round-trip
     "agent_to_yaml",
     "load_agent_from_yaml",

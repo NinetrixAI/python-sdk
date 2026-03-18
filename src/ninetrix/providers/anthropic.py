@@ -95,12 +95,18 @@ class AnthropicAdapter(LLMProviderAdapter):
         anthropic_tools, schema_tool_name = self._build_tools(tools, output_schema)
         msgs = self._build_messages(messages, attachments)
 
+        # Anthropic requires system prompt as top-level param, not in messages array
+        system_parts = [m["content"] for m in msgs if m.get("role") == "system"]
+        msgs = [m for m in msgs if m.get("role") != "system"]
+
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": msgs,
             "max_tokens": cfg.max_tokens or 4096,
             "temperature": cfg.temperature,
         }
+        if system_parts:
+            kwargs["system"] = "\n\n".join(system_parts)
         if cfg.top_p is not None:
             kwargs["top_p"] = cfg.top_p
         if cfg.stop_sequences:
@@ -169,12 +175,17 @@ class AnthropicAdapter(LLMProviderAdapter):
         anthropic_tools, _ = self._build_tools(tools, output_schema=None)
         msgs = self._build_messages(messages, attachments)
 
+        system_parts = [m["content"] for m in msgs if m.get("role") == "system"]
+        msgs = [m for m in msgs if m.get("role") != "system"]
+
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": msgs,
             "max_tokens": cfg.max_tokens or 4096,
             "temperature": cfg.temperature,
         }
+        if system_parts:
+            kwargs["system"] = "\n\n".join(system_parts)
         if cfg.top_p is not None:
             kwargs["top_p"] = cfg.top_p
         if cfg.stop_sequences:
@@ -230,16 +241,17 @@ class AnthropicAdapter(LLMProviderAdapter):
         self, tools: list[dict], output_schema: dict | None
     ) -> tuple[list[dict], str | None]:
         """Convert ninetrix tool defs to Anthropic format + optional schema tool."""
-        anthropic_tools = [
-            {
-                "name": t["name"],
-                "description": t.get("description", ""),
-                "input_schema": t.get(
+        anthropic_tools = []
+        for t in tools:
+            # Unwrap OpenAI-compatible {"type": "function", "function": {...}} wrapper
+            fn = t.get("function", t)
+            anthropic_tools.append({
+                "name": fn["name"],
+                "description": fn.get("description", ""),
+                "input_schema": fn.get(
                     "parameters", {"type": "object", "properties": {}}
                 ),
-            }
-            for t in tools
-        ]
+            })
         schema_tool_name: str | None = None
         if output_schema is not None:
             schema_tool_name = _SCHEMA_TOOL_NAME
@@ -257,22 +269,85 @@ class AnthropicAdapter(LLMProviderAdapter):
     def _build_messages(
         self, messages: list[dict], attachments: list[Attachment] | None
     ) -> list[dict]:
-        """Inject attachment content blocks into the last user message."""
-        if not attachments:
-            return messages
-        msgs = list(messages)
-        for i in range(len(msgs) - 1, -1, -1):
-            if msgs[i].get("role") == "user":
-                existing = msgs[i].get("content", "")
-                content: list[dict] = []
-                if isinstance(existing, str):
-                    content.append({"type": "text", "text": existing})
-                elif isinstance(existing, list):
-                    content.extend(existing)
-                for att in attachments:
-                    content.append(self._format_attachment(att))
-                msgs[i] = {**msgs[i], "content": content}
-                break
+        """Convert OpenAI-compatible message history to Anthropic format.
+
+        Handles:
+        - Assistant messages with tool_calls → content blocks with type=tool_use
+        - role=tool results → role=user messages with type=tool_result blocks
+        - Attachment injection into the last user message
+        """
+        msgs: list[dict] = []
+        pending_tool_results: list[dict] = []
+
+        for m in messages:
+            role = m.get("role")
+
+            if role == "system":
+                # Passed separately as top-level system param — keep as-is for extraction
+                msgs.append(m)
+
+            elif role == "tool":
+                # Buffer tool results; they'll be emitted as a single user message
+                pending_tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": m.get("tool_call_id", ""),
+                    "content": m.get("content", ""),
+                })
+
+            else:
+                # Flush any buffered tool results before the next assistant/user turn
+                if pending_tool_results:
+                    msgs.append({"role": "user", "content": pending_tool_results})
+                    pending_tool_results = []
+
+                if role == "assistant":
+                    tool_calls = m.get("tool_calls") or []
+                    if tool_calls:
+                        # Build content blocks: optional text + tool_use blocks
+                        content: list[dict] = []
+                        text = m.get("content") or ""
+                        if text:
+                            content.append({"type": "text", "text": text})
+                        for tc in tool_calls:
+                            fn = tc.get("function", {})
+                            raw_args = fn.get("arguments", "{}")
+                            try:
+                                args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                            except (json.JSONDecodeError, TypeError):
+                                args = {}
+                            content.append({
+                                "type": "tool_use",
+                                "id": tc.get("id", ""),
+                                "name": fn.get("name", ""),
+                                "input": args,
+                            })
+                        msgs.append({"role": "assistant", "content": content})
+                    else:
+                        msgs.append({"role": "assistant", "content": m.get("content", "")})
+
+                else:
+                    # user message — handle attachments below
+                    msgs.append(m)
+
+        # Flush any trailing tool results
+        if pending_tool_results:
+            msgs.append({"role": "user", "content": pending_tool_results})
+
+        # Inject attachments into the last user message
+        if attachments:
+            for i in range(len(msgs) - 1, -1, -1):
+                if msgs[i].get("role") == "user":
+                    existing = msgs[i].get("content", "")
+                    content_blocks: list[dict] = []
+                    if isinstance(existing, str):
+                        content_blocks.append({"type": "text", "text": existing})
+                    elif isinstance(existing, list):
+                        content_blocks.extend(existing)
+                    for att in attachments:
+                        content_blocks.append(self._format_attachment(att))
+                    msgs[i] = {**msgs[i], "content": content_blocks}
+                    break
+
         return msgs
 
     def _format_attachment(self, att: Attachment) -> dict:

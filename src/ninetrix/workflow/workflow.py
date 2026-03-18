@@ -35,10 +35,11 @@ import asyncio
 import time
 import uuid
 from contextvars import ContextVar
-from typing import Any, Callable
+from contextlib import AbstractAsyncContextManager
+from typing import Any, Callable, overload
 
 from ninetrix._internals.types import AgentResult, WorkflowResult
-from ninetrix.workflow.context import WorkflowContext
+from ninetrix.workflow.context import WorkflowContext, _StepResult
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +228,26 @@ class _WorkflowDecorator:
     :class:`~contextvars.ContextVar`.
     """
 
+    # ------------------------------------------------------------------
+    # Overloads so IDEs know the return type in both usage forms:
+    #   @Workflow               → WorkflowRunner
+    #   @Workflow(durable=True) → Callable[[Callable], WorkflowRunner]
+    # ------------------------------------------------------------------
+
+    @overload
+    def __call__(self, fn: Callable) -> WorkflowRunner: ...
+
+    @overload
+    def __call__(
+        self,
+        fn: None = None,
+        *,
+        durable: bool = ...,
+        name: str | None = ...,
+        db_url: str | None = ...,
+        max_budget: float = ...,
+    ) -> Callable[[Callable], WorkflowRunner]: ...
+
     def __call__(
         self,
         fn: Callable | None = None,
@@ -235,7 +256,7 @@ class _WorkflowDecorator:
         name: str | None = None,
         db_url: str | None = None,
         max_budget: float = 0.0,
-    ) -> Any:
+    ) -> WorkflowRunner | Callable[[Callable], WorkflowRunner]:
         """Decorate an async function as a Workflow.
 
         Can be used with or without arguments::
@@ -245,6 +266,17 @@ class _WorkflowDecorator:
 
             @Workflow(durable=True, max_budget=2.00)
             async def advanced(q: str) -> str: ...
+
+        Args:
+            fn:          The async function to wrap (only when used bare, without parens).
+            durable:     Enable step-level checkpointing and resume.
+            name:        Override the workflow name (defaults to the function name).
+            db_url:      PostgreSQL URL for the checkpointer.  Falls back to
+                         ``DATABASE_URL`` env var, then in-memory.
+            max_budget:  Hard spending cap in USD for the whole run.  ``0.0`` = unlimited.
+
+        Returns:
+            :class:`WorkflowRunner` (bare usage) or a decorator (with-parens usage).
         """
         def _make_runner(f: Callable) -> WorkflowRunner:
             return WorkflowRunner(
@@ -305,8 +337,28 @@ class _WorkflowDecorator:
         *,
         requires_approval: bool = False,
         timeout: float | None = None,
-    ):
-        """Mark an explicit step boundary (no-op in non-durable mode)."""
+    ) -> AbstractAsyncContextManager[_StepResult]:
+        """Mark an explicit step boundary.
+
+        Yields a :class:`~ninetrix.workflow.context._StepResult` with:
+
+        - ``step.is_cached`` — ``True`` on resume if this step already ran.
+        - ``step.value``     — the stored result (cached or freshly set).
+        - ``step.set(v)``    — persist *v* as this step's result.
+
+        Example::
+
+            async with Workflow.step("research") as step:
+                if not step.is_cached:
+                    result = await researcher.arun(topic)
+                    step.set(result.output)
+                data = step.value
+
+        Args:
+            name:              Unique step name within this workflow run.
+            requires_approval: Save with ``pending_approval`` status (HITL gate).
+            timeout:           Reserved for future per-step timeout support.
+        """
         return _get_ctx().step(
             name, requires_approval=requires_approval, timeout=timeout
         )

@@ -24,6 +24,15 @@ providers = [
     "google-generativeai>=0.8",
     "litellm>=1.40",
 ]
+serve = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+]
+otel = [
+    "opentelemetry-api>=1.24",
+    "opentelemetry-sdk>=1.24",
+    "opentelemetry-exporter-otlp>=1.24",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

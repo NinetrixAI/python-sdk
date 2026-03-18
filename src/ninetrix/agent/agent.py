@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from concurrent.futures import Future
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from ninetrix._internals.types import (
     AgentResult,
@@ -667,6 +667,229 @@ class Agent(HooksMixin, Generic[T_Output]):
         """
         from ninetrix.export.loader import load_agent_from_yaml
         return load_agent_from_yaml(path)
+
+    # ------------------------------------------------------------------
+    # Lifecycle: serve / build / deploy
+    # ------------------------------------------------------------------
+
+    def serve(
+        self,
+        host: str = "0.0.0.0",
+        port: int = 9000,
+        reload: bool = False,
+        *,
+        app_only: bool = False,
+    ) -> Any:
+        """Serve the agent as an HTTP API using FastAPI + uvicorn.
+
+        Starts a blocking web server that exposes the agent on:
+
+        - ``POST /invoke``  — run the agent, return :class:`~ninetrix.AgentResult` JSON
+        - ``GET  /info``    — return :class:`~ninetrix.agent.introspection.AgentInfo` JSON
+        - ``GET  /health``  — return ``{"status": "ok", "agent": name}``
+        - ``POST /stream``  — SSE endpoint streaming :class:`~ninetrix.StreamEvent` objects
+
+        Args:
+            host:      Bind address (default: ``"0.0.0.0"``).
+            port:      TCP port (default: ``9000``).
+            reload:    Enable hot-reload (for development).
+            app_only:  If ``True``, return the FastAPI app without starting
+                       the server.  Useful for ASGI embedding or testing.
+
+        Returns:
+            When ``app_only=True``: the FastAPI application instance.
+            When ``app_only=False``: does not return (blocking call).
+
+        Raises:
+            ConfigurationError: If FastAPI or uvicorn is not installed.
+
+        Example::
+
+            agent.serve(host="0.0.0.0", port=9000)
+            # Or for testing:
+            app = agent.serve(app_only=True)
+        """
+        from ninetrix.agent.server import create_agent_app, serve_agent
+
+        if app_only:
+            return create_agent_app(self)
+
+        serve_agent(self, host=host, port=port, reload=reload)
+        return None
+
+    def build(
+        self,
+        tag: Optional[str] = None,
+        push: bool = False,
+    ) -> dict[str, Any]:
+        """Build a Docker image for this agent using the Ninetrix CLI.
+
+        Serialises the agent to a temporary ``agentfile.yaml``, then invokes
+        ``ninetrix build`` as a subprocess.
+
+        Args:
+            tag:  Docker image tag (default: ``"agentfile/{name}:latest"``).
+            push: If ``True``, also run ``docker push {tag}`` after a successful build.
+
+        Returns:
+            ``{"image": tag, "yaml_path": str, "success": bool}``
+
+        Raises:
+            ConfigurationError: If the ``ninetrix`` CLI is not found in PATH.
+
+        Example::
+
+            result = agent.build(tag="myorg/my-agent:v1", push=True)
+            print(result["image"])   # "myorg/my-agent:v1"
+        """
+        import shutil
+        import subprocess
+        import tempfile
+        import os
+        import uuid
+
+        from ninetrix._internals.types import ConfigurationError
+
+        tag = tag or f"agentfile/{self.config.name}:latest"
+
+        # Check that ninetrix CLI is available
+        if not shutil.which("ninetrix") and not shutil.which("agentfile"):
+            raise ConfigurationError(
+                "The 'ninetrix' CLI was not found in PATH.\n"
+                "  Why: agent.build() requires the CLI to call 'ninetrix build'.\n"
+                "  Fix: pip install ninetrix  or ensure the CLI is on your PATH."
+            )
+
+        cli = shutil.which("ninetrix") or shutil.which("agentfile")
+
+        # Write agentfile.yaml to a temp file
+        yaml_str = self.to_yaml()
+        tmp_dir = tempfile.gettempdir()
+        yaml_path = os.path.join(tmp_dir, f"agentfile_{uuid.uuid4().hex[:8]}.yaml")
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.write(yaml_str)
+
+        try:
+            result = subprocess.run(
+                [cli, "build", "--file", yaml_path, "--tag", tag],
+                capture_output=True,
+                text=True,
+            )
+            success = result.returncode == 0
+
+            if success and push:
+                docker = shutil.which("docker")
+                if docker:
+                    subprocess.run(
+                        [docker, "push", tag],
+                        capture_output=True,
+                        text=True,
+                    )
+        except Exception as exc:
+            from ninetrix._internals.types import ConfigurationError as CE
+            raise CE(
+                f"agent.build() failed while running the CLI.\n"
+                f"  Why: {type(exc).__name__}: {exc}\n"
+                "  Fix: ensure 'ninetrix' CLI and 'docker' are installed and on PATH."
+            ) from exc
+
+        return {
+            "image": tag,
+            "yaml_path": yaml_path,
+            "success": success,
+        }
+
+    async def deploy(
+        self,
+        workspace_id: Optional[str] = None,
+        api_key: Optional[str] = None,
+        region: str = "iad",
+    ) -> dict[str, Any]:
+        """Deploy this agent to Ninetrix Cloud.
+
+        Serialises the agent to YAML and calls
+        ``POST /v1/deployments`` on the Ninetrix Cloud API.
+
+        Args:
+            workspace_id: Cloud workspace ID.  If omitted, resolved from
+                          :class:`~ninetrix._internals.tenant.TenantContext` or
+                          ``NINETRIX_WORKSPACE_ID`` env var.
+            api_key:      Ninetrix API key.  If omitted, resolved from
+                          :class:`~ninetrix._internals.tenant.TenantContext` or
+                          ``NINETRIX_API_KEY`` env var.
+            region:       Fly.io region to deploy to (default: ``"iad"``).
+
+        Returns:
+            ``{"deployment_id": str, "url": str, "status": "deploying"}``
+
+        Raises:
+            CredentialError: If workspace_id or api_key cannot be resolved.
+
+        Example::
+
+            result = await agent.deploy(workspace_id="ws_abc123", api_key="nxt_...")
+            print(result["url"])   # "https://my-agent.ninetrix.app"
+        """
+        import os
+        from ninetrix._internals.types import CredentialError
+        from ninetrix._internals.http import get_http_client
+
+        # Resolve workspace_id
+        if not workspace_id:
+            from ninetrix._internals.tenant import get_tenant
+            tenant = get_tenant()
+            if tenant:
+                workspace_id = tenant.workspace_id
+            workspace_id = workspace_id or os.environ.get("NINETRIX_WORKSPACE_ID", "")
+
+        # Resolve api_key
+        if not api_key:
+            from ninetrix._internals.tenant import get_tenant
+            tenant = get_tenant()
+            if tenant:
+                api_key = tenant.api_key
+            api_key = api_key or os.environ.get("NINETRIX_API_KEY", "")
+
+        if not workspace_id or not api_key:
+            raise CredentialError(
+                "agent.deploy() requires workspace_id and api_key.\n"
+                "  Why: could not find workspace_id or api_key in arguments, "
+                "TenantContext, or environment variables.\n"
+                "  Fix: pass workspace_id= and api_key= explicitly, or set "
+                "NINETRIX_WORKSPACE_ID and NINETRIX_API_KEY environment variables."
+            )
+
+        yaml_str = self.to_yaml()
+        api_base = os.environ.get("NINETRIX_API_URL", "https://api.ninetrix.io")
+
+        async with get_http_client() as client:
+            resp = await client.post(
+                f"{api_base}/v1/deployments",
+                json={
+                    "yaml": yaml_str,
+                    "agent_name": self.config.name,
+                    "region": region,
+                },
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "X-Workspace-ID": workspace_id,
+                },
+                timeout=60.0,
+            )
+
+        if resp.status_code >= 400:
+            raise CredentialError(
+                f"agent.deploy() failed with HTTP {resp.status_code}.\n"
+                f"  Response: {resp.text[:200]}\n"
+                "  Fix: check your workspace_id and api_key."
+            )
+
+        data = resp.json()
+        return {
+            "deployment_id": data.get("deployment_id", ""),
+            "url": data.get("url", ""),
+            "status": data.get("status", "deploying"),
+        }
 
     # ------------------------------------------------------------------
     # Dunder helpers
