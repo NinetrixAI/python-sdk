@@ -279,18 +279,16 @@ print("✓ PR 15: ToolDispatcher (local)")
 
 
 # =============================================================================
-# PR 16 — InMemoryCheckpointer
+# PR 17 — InMemoryCheckpointer
 # =============================================================================
 
-# Uncomment when PR 16 lands:
-#
-# import asyncio
-# from ninetrix.checkpoint.memory import InMemoryCheckpointer
-# cp = InMemoryCheckpointer()
-# asyncio.run(cp.save(thread_id="t1", agent_id="a1", history=[{"role": "user", "content": "hi"}], tokens_used=10))
-# saved = asyncio.run(cp.load("t1"))
-# assert saved["history"][0]["content"] == "hi"
-# print("✓ PR 16: InMemoryCheckpointer")
+import asyncio
+from ninetrix.checkpoint.memory import InMemoryCheckpointer
+cp = InMemoryCheckpointer()
+asyncio.run(cp.save(thread_id="t1", agent_id="a1", history=[{"role": "user", "content": "hi"}], tokens_used=10))
+saved = asyncio.run(cp.load("t1"))
+assert saved["history"][0]["content"] == "hi"
+print("✓ PR 17: InMemoryCheckpointer")
 
 
 # =============================================================================
