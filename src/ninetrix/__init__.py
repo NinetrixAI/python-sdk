@@ -77,6 +77,13 @@ from ninetrix.runtime.budget import BudgetTracker as BudgetTracker, BudgetUsage 
 from ninetrix.runtime.runner import AgentRunner as AgentRunner, RunnerConfig as RunnerConfig
 from ninetrix.checkpoint.base import Checkpointer as Checkpointer
 from ninetrix.checkpoint.memory import InMemoryCheckpointer as InMemoryCheckpointer
+from ninetrix.agent.config import AgentConfig as AgentConfig
+from ninetrix.agent.introspection import (
+    AgentInfo as AgentInfo,
+    ValidationIssue as ValidationIssue,
+    DryRunResult as DryRunResult,
+)
+from ninetrix.agent.agent import Agent as Agent
 from ninetrix.runtime.dispatcher import (
     ToolSource as ToolSource,
     ToolDispatcher as ToolDispatcher,
@@ -115,6 +122,12 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 18 — Agent + AgentConfig + introspection
+    "Agent",
+    "AgentConfig",
+    "AgentInfo",
+    "ValidationIssue",
+    "DryRunResult",
     # PR 17 — Checkpointer + InMemoryCheckpointer
     "Checkpointer",
     "InMemoryCheckpointer",

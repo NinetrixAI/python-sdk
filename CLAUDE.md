@@ -6,7 +6,9 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 17** — `checkpoint/base.py` + `checkpoint/memory.py` (skipped MW 10-12)
+**Current PR: 19** — `export/writer.py` + `export/loader.py` (YAML round-trip)
+**PR 18 done:** `agent/config.py` + `agent/agent.py` + `agent/introspection.py` — Agent, AgentConfig, info/validate/dry_run
+**PR 17 done:** `checkpoint/base.py` + `checkpoint/memory.py` — Checkpointer ABC + InMemoryCheckpointer
 **PR 16 done:** `runtime/runner.py` — AgentRunner, RunnerConfig, direct mode, structured output parse+retry
 **PR 15 done:** `tools/context.py` + `runtime/dispatcher.py` — ToolContext, LocalToolSource, RegistryToolSource, ToolDispatcher
 **PR 14 done:** `runtime/history.py` + `runtime/budget.py` — MessageHistory, BudgetTracker, BudgetUsage
@@ -128,7 +130,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 15 | `tools/context.py` + `runtime/dispatcher.py` | Local + **RegistryToolSource** (lazy skill loading) | ✅ |
 | 16 | `runtime/runner.py` | Direct mode + structured output | ✅ |
 | 17 | `checkpoint/base.py` + `checkpoint/memory.py` | | ⬜ |
-| 18 | `agent/config.py` + `agent/agent.py` + `agent/introspection.py` | `_build_runner()`, validate/dry_run/info | ⬜ |
+| 18 | `agent/config.py` + `agent/agent.py` + `agent/introspection.py` | `_build_runner()`, validate/dry_run/info | ✅ |
 | **19** | **`export/writer.py` + `export/loader.py`** | **Moved from 28 — YAML is core** | ⬜ |
 | 20 | `observability/events.py` + `observability/hooks.py` | | ⬜ |
 | 21 | `observability/streaming.py` | | ⬜ |

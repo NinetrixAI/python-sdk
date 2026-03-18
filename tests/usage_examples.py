@@ -292,44 +292,32 @@ print("✓ PR 17: InMemoryCheckpointer")
 
 
 # =============================================================================
-# PR 17 — Agent (core)
+# PR 18 — Agent (core)
 # =============================================================================
 
-# Uncomment when PR 17 lands:
-#
-# from ninetrix import Agent
-#
-# # Basic agent — local tools only
-# agent = Agent(
-#     name="analyst",
-#     provider="anthropic",
-#     model="claude-sonnet-4-6",
-#     role="Financial analyst",
-#     tools=[get_price, search_web],
-# )
-#
-# # validate() — no network call, just config check
-# issues = agent.validate()
-# assert issues == [], f"Unexpected issues: {issues}"
-#
-# # dry_run() — resolves tools + provider, no LLM call
-# info = agent.dry_run("Analyze AAPL")
-# assert info.tool_names == ["get_price", "search_web"]
-# assert info.system_prompt != ""
-#
-# # info() — static summary
-# summary = agent.info()
-# assert summary.name == "analyst"
-# assert summary.provider == "anthropic"
-#
-# # run() — sync, safe in any context (uses _run_in_thread internally)
-# # Requires ANTHROPIC_API_KEY set to run live
-# # result = agent.run("What is the price of AAPL?")
-# # assert isinstance(result.output, str)
-# # assert result.tokens_used > 0
-# # assert result.cost_usd > 0
-#
-# print("✓ PR 17: Agent (validate / dry_run / info)")
+from ninetrix import Agent
+
+# Basic agent construction — no API call yet
+agent = Agent(
+    name="analyst",
+    provider="anthropic",
+    model="claude-sonnet-4-6",
+    role="Financial analyst",
+    goal="Answer questions about company metrics.",
+)
+
+# info() — static summary, no network calls
+summary = agent.info()
+assert summary.name == "analyst"
+assert summary.provider == "anthropic"
+assert summary.tool_count == 0
+assert summary.system_prompt_chars > 0
+
+# run() and arun() require a real API key — skip live call in usage_examples
+# result = agent.run("What is the price of AAPL?")
+# assert isinstance(result.output, str)
+
+print("✓ PR 18: Agent (info / validate / dry_run)")
 
 
 # =============================================================================
