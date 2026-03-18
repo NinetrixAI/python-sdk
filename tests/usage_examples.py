@@ -200,6 +200,28 @@ print("✓ PR 8: Telemetry")
 
 
 # =============================================================================
+# PR 9 — ErrorContext
+# =============================================================================
+
+from ninetrix.observability.errors import ErrorContext, error_context
+from ninetrix import ErrorContext as EC, error_context as ec
+assert EC is ErrorContext
+assert ec is error_context
+
+from ninetrix._internals.types import ProviderError
+try:
+    with ErrorContext(agent_name="analyst", thread_id="t-1", step=3):
+        raise ProviderError("timeout", provider="anthropic")
+except ProviderError as e:
+    ctx = ErrorContext.get(e)
+    assert ctx["agent_name"] == "analyst"
+    assert ctx["thread_id"] == "t-1"
+    assert ctx["step"] == 3
+
+print("✓ PR 9: ErrorContext")
+
+
+# =============================================================================
 # PR 13 — MessageHistory + BudgetTracker
 # =============================================================================
 

@@ -61,6 +61,10 @@ from ninetrix.observability.telemetry import (
     TelemetryCollector as TelemetryCollector,
     record_event as record_event,
 )
+from ninetrix.observability.errors import (
+    ErrorContext as ErrorContext,
+    error_context as error_context,
+)
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -92,6 +96,9 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 9 — ErrorContext
+    "ErrorContext",
+    "error_context",
     # PR 8 — Telemetry
     "TelemetryEvent",
     "TelemetryCollector",

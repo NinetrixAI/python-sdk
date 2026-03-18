@@ -6,7 +6,8 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 9** — `observability/errors.py`
+**Current PR: 10** — `middleware/pipeline.py`
+**PR 9 done:** `observability/errors.py` — ErrorContext, error_context
 **PR 8 done:** `observability/telemetry.py` — TelemetryCollector, record_event, opt-out
 **PR 7 done:** `observability/logger.py` — NinetrixLogger, enable_debug, get_logger
 **PR 6 done:** `providers/` — AnthropicAdapter, OpenAIAdapter, GoogleAdapter, LiteLLMAdapter, FallbackProviderAdapter

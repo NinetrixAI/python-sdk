@@ -17,6 +17,10 @@ from ninetrix.observability.telemetry import (
     TelemetryCollector as TelemetryCollector,
     record_event as record_event,
 )
+from ninetrix.observability.errors import (
+    ErrorContext as ErrorContext,
+    error_context as error_context,
+)
 
 __all__ = [
     "NinetrixLogger",
@@ -25,4 +29,6 @@ __all__ = [
     "TelemetryEvent",
     "TelemetryCollector",
     "record_event",
+    "ErrorContext",
+    "error_context",
 ]
