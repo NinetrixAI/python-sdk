@@ -460,23 +460,18 @@ print("✓ PR 20: Events + Hooks")
 # PR 21 — Streaming
 # =============================================================================
 
-# Uncomment when PR 19 lands:
-#
-# import asyncio
-# from ninetrix import Agent
-# agent = Agent(provider="anthropic", model="claude-sonnet-4-6")
-#
-# async def stream_test():
-#     tokens = []
-#     async for event in agent.stream("Say hello"):
-#         if event.type == "token":
-#             tokens.append(event.content)
-#         elif event.type == "done":
-#             break
-#     assert len(tokens) > 0
-#
-# # asyncio.run(stream_test())
-# print("✓ PR 19: Streaming")
+import inspect as _inspect
+from ninetrix import Agent, StreamEvent, StreamingRunner
+
+_stream_agent = Agent(provider="anthropic")
+assert _inspect.isasyncgenfunction(_stream_agent.stream)
+
+_se = StreamEvent(type="token", content="hello")
+assert _se.type == "token"
+assert _se.structured_output is None  # new field
+
+assert StreamingRunner is not None
+print("✓ PR 21: Streaming")
 
 
 # =============================================================================

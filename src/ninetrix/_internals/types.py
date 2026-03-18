@@ -186,6 +186,7 @@ class StreamEvent:
     tokens_used: int = 0
     cost_usd: float = 0.0
     error: Exception | None = None
+    structured_output: Any = None   # set on "done" when output_type= is used
 
 
 @dataclass

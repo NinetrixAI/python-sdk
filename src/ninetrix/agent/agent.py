@@ -262,6 +262,56 @@ class Agent(HooksMixin, Generic[T_Output]):
         runner = await self._get_runner()
         return await runner.run(message, thread_id=thread_id)
 
+    async def stream(
+        self,
+        message: str,
+        *,
+        thread_id: Optional[str] = None,
+        attachments: Optional[list] = None,
+        tool_context: Optional[dict[str, Any]] = None,
+    ):
+        """Run the agent and yield :class:`~ninetrix.StreamEvent` objects.
+
+        Returns an async generator that yields events at each lifecycle point:
+        ``token``, ``tool_start``, ``tool_end``, ``turn_end``, ``done``, and
+        ``error``.  The generator always terminates normally — exceptions are
+        delivered as ``error`` events.
+
+        Usage::
+
+            async for event in agent.stream("Summarise these docs"):
+                if event.type == "token":
+                    print(event.content, end="", flush=True)
+                elif event.type == "tool_start":
+                    print(f"\\nCalling tool: {event.tool_name}")
+                elif event.type == "done":
+                    print(f"\\nCost: ${event.cost_usd:.5f}")
+
+        Args:
+            message:      The user's input message.
+            thread_id:    Conversation ID for multi-turn resumption.
+            attachments:  Image / document attachments for the first turn.
+            tool_context: Per-request context dict injected into tool calls.
+
+        Yields:
+            :class:`~ninetrix._internals.types.StreamEvent` instances.
+        """
+        from ninetrix.runtime.streaming import StreamingRunner
+        runner = await self._get_runner()
+        streaming = StreamingRunner(
+            provider=runner.provider,
+            dispatcher=runner.dispatcher,
+            config=runner.config,
+            event_bus=runner.event_bus,
+        )
+        async for event in streaming.stream(
+            message,
+            thread_id=thread_id,
+            attachments=attachments,
+            tool_context=tool_context,
+        ):
+            yield event
+
     # ------------------------------------------------------------------
     # Introspection
     # ------------------------------------------------------------------
