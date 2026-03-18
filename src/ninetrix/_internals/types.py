@@ -200,6 +200,8 @@ class WorkflowResult:
     elapsed_seconds: float
     completed_steps: list[str] = field(default_factory=list)
     skipped_steps: list[str] = field(default_factory=list)   # resumed steps
+    budget_remaining_usd: float = 0.0    # how much budget was left (0 if no limit)
+    budget_limit_usd: float = 0.0        # what the limit was (0 = no limit)
 
 
 @dataclass

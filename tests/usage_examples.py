@@ -554,6 +554,42 @@ print("✓ PR 24: Planner")
 
 
 # =============================================================================
+# PR 25 — Workflow (sequential + parallel + fan_out + reduce + branch)
+# =============================================================================
+
+from ninetrix import Workflow, WorkflowBudgetTracker, WorkflowContext
+
+assert Workflow is not None
+assert WorkflowContext is not None
+assert WorkflowBudgetTracker is not None
+
+# Basic decorator — no parens
+@Workflow
+async def _wf_simple(msg: str) -> str:
+    return msg + "!"
+
+assert isinstance(_wf_simple, __import__("ninetrix").WorkflowRunner)
+
+# With kwargs
+@Workflow(name="custom", max_budget=5.0)
+async def _wf_budget(msg: str) -> str:
+    return msg
+
+assert _wf_budget.__name__ == "custom"
+assert _wf_budget._max_budget_usd == 5.0
+
+# WorkflowBudgetTracker
+import asyncio as _asyncio
+
+_bt = WorkflowBudgetTracker(10.0)
+_asyncio.run(_bt.charge(3.0, "agent"))
+assert _bt.spent == 3.0
+assert _bt.remaining == 7.0
+
+print("✓ PR 25: Workflow + WorkflowBudgetTracker")
+
+
+# =============================================================================
 # PR 29 — Testing utilities
 # =============================================================================
 
