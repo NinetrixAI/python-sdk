@@ -441,19 +441,19 @@ print("✓ PR 20: Events + Hooks")
 # PR 22 — AgentClient + RemoteAgent (AgentProtocol polymorphism)
 # =============================================================================
 
-# Uncomment when PR 22 lands:
-#
-# from ninetrix import Agent, AgentClient, RemoteAgent
-# from ninetrix._internals.types import AgentProtocol
-#
-# local  = Agent(name="analyst", provider="anthropic", model="claude-sonnet-4-6")
-# docker = AgentClient("http://analyst:9000", name="analyst")
-# cloud  = RemoteAgent("my-workspace/analyst", api_key="nxt_test")
-#
-# assert isinstance(local,  AgentProtocol), "Agent must satisfy AgentProtocol"
-# assert isinstance(docker, AgentProtocol), "AgentClient must satisfy AgentProtocol"
-# assert isinstance(cloud,  AgentProtocol), "RemoteAgent must satisfy AgentProtocol"
-# print("✓ PR 22: AgentProtocol polymorphism")
+from ninetrix import Agent, AgentClient, RemoteAgent
+from ninetrix._internals.types import AgentProtocol
+
+_local  = Agent(name="analyst", provider="anthropic")
+_docker = AgentClient("http://analyst:9000", name="analyst")
+_cloud  = RemoteAgent("my-workspace/analyst", api_key="nxt_test")
+
+assert isinstance(_local,  AgentProtocol), "Agent must satisfy AgentProtocol"
+assert isinstance(_docker, AgentProtocol), "AgentClient must satisfy AgentProtocol"
+assert isinstance(_cloud,  AgentProtocol), "RemoteAgent must satisfy AgentProtocol"
+assert _docker.name == "analyst"
+assert _cloud.name == "analyst"
+print("✓ PR 22: AgentProtocol polymorphism")
 
 
 # =============================================================================

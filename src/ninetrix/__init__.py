@@ -71,6 +71,8 @@ from ninetrix.observability.events import (
 )
 from ninetrix.observability.hooks import HooksMixin as HooksMixin
 from ninetrix.runtime.streaming import StreamingRunner as StreamingRunner
+from ninetrix.client.local import AgentClient as AgentClient
+from ninetrix.client.remote import RemoteAgent as RemoteAgent
 from ninetrix._internals.tenant import (
     TenantContext as TenantContext,
     set_tenant as set_tenant,
@@ -165,6 +167,9 @@ __all__ = [
     "get_tenant",
     "require_tenant",
     "tenant_scope",
+    # PR 22 — AgentClient + RemoteAgent
+    "AgentClient",
+    "RemoteAgent",
     # PR 21 — StreamingRunner
     "StreamingRunner",
     # PR 20 — EventBus + HooksMixin
