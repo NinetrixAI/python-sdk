@@ -72,6 +72,8 @@ from ninetrix._internals.tenant import (
     require_tenant as require_tenant,
     tenant_scope as tenant_scope,
 )
+from ninetrix.runtime.history import MessageHistory as MessageHistory
+from ninetrix.runtime.budget import BudgetTracker as BudgetTracker, BudgetUsage as BudgetUsage
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -103,6 +105,10 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 14 — MessageHistory + BudgetTracker
+    "MessageHistory",
+    "BudgetTracker",
+    "BudgetUsage",
     # PR 13 — TenantContext
     "TenantContext",
     "set_tenant",

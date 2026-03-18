@@ -248,17 +248,18 @@ print("✓ PR 13: TenantContext")
 # PR 14 — MessageHistory + BudgetTracker
 # =============================================================================
 
-# Uncomment when PR 13 lands:
-#
-# from ninetrix.runtime.history import MessageHistory
-# from ninetrix.runtime.budget import BudgetTracker
-# history = MessageHistory(max_tokens=8000)
-# history.append({"role": "user", "content": "hello"})
-# assert len(history.messages()) == 1
-# budget = BudgetTracker(max_usd=1.0)
-# budget.charge(input_tokens=100, output_tokens=50, model="claude-sonnet-4-6", provider="anthropic")
-# assert budget.usage().cost_usd > 0
-# print("✓ PR 13: MessageHistory + BudgetTracker")
+from ninetrix.runtime.history import MessageHistory
+from ninetrix.runtime.budget import BudgetTracker
+
+history = MessageHistory(max_tokens=8000)
+history.append({"role": "user", "content": "hello"})
+assert len(history.messages()) == 1
+
+budget = BudgetTracker(max_usd=1.0)
+budget.charge(input_tokens=100, output_tokens=50, model="claude-sonnet-4-6", provider="anthropic")
+assert budget.usage().cost_usd > 0
+
+print("✓ PR 14: MessageHistory + BudgetTracker")
 
 
 # =============================================================================
