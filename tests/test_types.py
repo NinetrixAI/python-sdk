@@ -22,6 +22,7 @@ from ninetrix._internals.types import (
     LLMResponse,
     LLMChunk,
     ToolCall,
+    ProviderConfig,
     ImageAttachment,
     DocumentAttachment,
     image,
@@ -473,6 +474,119 @@ class TestAgentProtocol:
                 yield StreamEvent(type="done")
 
         assert not isinstance(NoName(), AgentProtocol)
+
+
+# ---------------------------------------------------------------------------
+# ProviderConfig
+# ---------------------------------------------------------------------------
+
+class TestProviderConfig:
+    def test_defaults(self):
+        cfg = ProviderConfig()
+        assert cfg.temperature == 0.0
+        assert cfg.max_tokens is None
+        assert cfg.top_p is None
+        assert cfg.stop_sequences == []
+        assert cfg.presence_penalty is None
+        assert cfg.frequency_penalty is None
+
+    def test_custom_values(self):
+        cfg = ProviderConfig(
+            temperature=0.7,
+            max_tokens=2048,
+            top_p=0.9,
+            stop_sequences=["STOP", "END"],
+            presence_penalty=0.1,
+            frequency_penalty=0.2,
+        )
+        assert cfg.temperature == 0.7
+        assert cfg.max_tokens == 2048
+        assert cfg.top_p == 0.9
+        assert cfg.stop_sequences == ["STOP", "END"]
+        assert cfg.presence_penalty == 0.1
+        assert cfg.frequency_penalty == 0.2
+
+    def test_stop_sequences_not_shared(self):
+        c1 = ProviderConfig()
+        c2 = ProviderConfig()
+        c1.stop_sequences.append("STOP")
+        assert c2.stop_sequences == []
+
+    def test_exported_from_ninetrix(self):
+        import ninetrix
+        assert hasattr(ninetrix, "ProviderConfig")
+        cfg = ninetrix.ProviderConfig(temperature=0.5)
+        assert cfg.temperature == 0.5
+
+
+# ---------------------------------------------------------------------------
+# LLMProviderAdapter Protocol — updated signature
+# ---------------------------------------------------------------------------
+
+class TestLLMProviderAdapterProtocol:
+    def test_class_with_complete_and_stream_satisfies_protocol(self):
+        from typing import AsyncIterator
+
+        class FakeAdapter:
+            async def complete(
+                self, messages, tools, *,
+                attachments=None, output_schema=None, config=None
+            ) -> LLMResponse:
+                return LLMResponse(content="ok")
+
+            async def stream(
+                self, messages, tools, *,
+                attachments=None, config=None
+            ) -> AsyncIterator[LLMChunk]:
+                yield LLMChunk(type="done")
+
+        assert isinstance(FakeAdapter(), LLMProviderAdapter)
+
+    def test_class_missing_stream_does_not_satisfy(self):
+        class NoStream:
+            async def complete(self, messages, tools, **kwargs) -> LLMResponse:
+                return LLMResponse(content="ok")
+
+        assert not isinstance(NoStream(), LLMProviderAdapter)
+
+    def test_complete_accepts_attachments(self):
+        """Verify attachments parameter is accepted (structural check via duck typing)."""
+        import inspect
+        from ninetrix._internals.types import LLMProviderAdapter
+
+        # The Protocol signature should accept attachments= keyword
+        # We verify this by checking a concrete implementation that uses it compiles
+        class FakeAdapter:
+            async def complete(self, messages, tools, *, attachments=None,
+                               output_schema=None, config=None):
+                assert attachments is None or isinstance(attachments, list)
+                return LLMResponse(content="")
+
+            async def stream(self, messages, tools, *, attachments=None, config=None):
+                yield LLMChunk(type="done")
+
+        import asyncio
+        adapter = FakeAdapter()
+        result = asyncio.run(adapter.complete([], [], attachments=None))
+        assert result.content == ""
+
+    def test_complete_accepts_provider_config(self):
+        import asyncio
+
+        class FakeAdapter:
+            async def complete(self, messages, tools, *, attachments=None,
+                               output_schema=None, config=None):
+                if config is not None:
+                    assert isinstance(config, ProviderConfig)
+                return LLMResponse(content="")
+
+            async def stream(self, messages, tools, *, attachments=None, config=None):
+                yield LLMChunk(type="done")
+
+        cfg = ProviderConfig(temperature=0.5, max_tokens=100)
+        adapter = FakeAdapter()
+        result = asyncio.run(adapter.complete([], [], config=cfg))
+        assert result.content == ""
 
 
 # ---------------------------------------------------------------------------

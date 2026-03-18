@@ -259,11 +259,51 @@ class CheckpointerProtocol(Protocol):
     async def delete(self, thread_id: str) -> None: ...
 
 
+@dataclass
+class ProviderConfig:
+    """
+    Normalized, provider-agnostic parameters passed to LLMProviderAdapter.complete()
+    and LLMProviderAdapter.stream().
+
+    Each adapter extracts the fields it supports and ignores the rest.
+    All fields are optional — adapters fall back to their own defaults when None.
+
+    How it maps to provider APIs:
+        temperature       → all providers
+        max_tokens        → Anthropic max_tokens, OpenAI max_tokens, Google maxOutputTokens
+        top_p             → Anthropic top_p, OpenAI top_p, Google topP
+        stop_sequences    → Anthropic stop_sequences, OpenAI stop, Google stopSequences
+        presence_penalty  → OpenAI only (ignored by Anthropic / Google)
+        frequency_penalty → OpenAI only (ignored by Anthropic / Google)
+    """
+    temperature: float = 0.0
+    max_tokens: int | None = None
+    top_p: float | None = None
+    stop_sequences: list[str] = field(default_factory=list)
+    presence_penalty: float | None = None      # OpenAI only
+    frequency_penalty: float | None = None     # OpenAI only
+
+
 @runtime_checkable
 class LLMProviderAdapter(Protocol):
     """
     Normalizes calls to any LLM provider into LLMResponse.
     Implemented by AnthropicAdapter, OpenAIAdapter, GoogleAdapter, LiteLLMAdapter.
+
+    Structured output contract:
+        If output_schema is set, the provider instructs the LLM to respond with
+        valid JSON matching that schema (using native JSON mode or tool-use trick).
+        The provider returns the raw JSON string in LLMResponse.content.
+        The runner owns the parse+retry loop — providers do NOT parse the JSON.
+
+    Attachments contract:
+        Attachments are processed by the provider into provider-native content blocks
+        (Anthropic content list, OpenAI message parts, etc.) before the API call.
+        They are appended to the last user message in the messages list.
+
+    force_json_schema (NOT on this Protocol):
+        Each adapter has a private _force_json_schema(schema) method.
+        It is called internally when output_schema is set — not by the runner.
     """
 
     async def complete(
@@ -271,8 +311,9 @@ class LLMProviderAdapter(Protocol):
         messages: list[dict],
         tools: list[dict],
         *,
+        attachments: "list[Attachment] | None" = None,
         output_schema: dict | None = None,
-        config: Any = None,
+        config: ProviderConfig | None = None,
     ) -> LLMResponse: ...
 
     async def stream(
@@ -280,7 +321,8 @@ class LLMProviderAdapter(Protocol):
         messages: list[dict],
         tools: list[dict],
         *,
-        config: Any = None,
+        attachments: "list[Attachment] | None" = None,
+        config: ProviderConfig | None = None,
     ) -> AsyncIterator[LLMChunk]: ...
 
 

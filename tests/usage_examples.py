@@ -116,12 +116,10 @@ print("✓ PR 1: Types + py.typed")
 # PR 3 — NinetrixConfig
 # =============================================================================
 
-# Uncomment when PR 3 lands:
-#
-# from ninetrix._internals.config import NinetrixConfig
-# cfg = NinetrixConfig.load()   # reads env → ~/.ninetrix/config.toml → defaults
-# assert cfg.default_provider in ("anthropic", "openai", "google", "litellm")
-# print("✓ PR 3: NinetrixConfig")
+from ninetrix._internals.config import NinetrixConfig
+cfg = NinetrixConfig.load()   # reads env → ~/.ninetrix/config.toml → defaults
+assert cfg.default_provider in ("anthropic", "openai", "google", "litellm", "groq", "mistral")
+print("✓ PR 3: NinetrixConfig")
 
 
 # =============================================================================
@@ -141,12 +139,22 @@ print("✓ PR 1: Types + py.typed")
 # PR 6 — Providers
 # =============================================================================
 
-# Uncomment when PR 6 lands:
-#
-# from ninetrix.providers.anthropic import AnthropicAdapter
-# from ninetrix.providers.base import LLMProviderAdapter
-# assert issubclass(AnthropicAdapter, LLMProviderAdapter)  # type: ignore
-# print("✓ PR 6: Providers")
+import sys, types as _types, unittest.mock as _mock
+_fake_anthropic = _types.ModuleType("anthropic")
+_fake_anthropic.AsyncAnthropic = _mock.MagicMock()  # type: ignore[attr-defined]
+_fake_anthropic.AuthenticationError = Exception  # type: ignore[attr-defined]
+_fake_anthropic.RateLimitError = Exception  # type: ignore[attr-defined]
+_fake_anthropic.APIStatusError = Exception  # type: ignore[attr-defined]
+if "anthropic" not in sys.modules:
+    sys.modules["anthropic"] = _fake_anthropic
+from ninetrix.providers.anthropic import AnthropicAdapter
+from ninetrix.providers.base import LLMProviderAdapter
+assert issubclass(AnthropicAdapter, LLMProviderAdapter)
+from ninetrix.providers.fallback import FallbackConfig, FallbackProviderAdapter
+from ninetrix import FallbackConfig as FC, FallbackProviderAdapter as FPA
+assert FC is FallbackConfig
+assert FPA is FallbackProviderAdapter
+print("✓ PR 6: Providers")
 
 
 # =============================================================================

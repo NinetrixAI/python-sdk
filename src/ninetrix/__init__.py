@@ -42,6 +42,15 @@ from ninetrix.discover import (
     discover_tools_in_files as discover_tools_in_files,
     load_local_tools as load_local_tools,
 )
+from ninetrix._internals.lifespan import (
+    startup as startup,
+    shutdown as shutdown,
+    lifespan as lifespan,
+)
+from ninetrix.providers import (
+    FallbackConfig as FallbackConfig,
+    FallbackProviderAdapter as FallbackProviderAdapter,
+)
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -54,6 +63,8 @@ from ninetrix._internals.types import (
     Attachment as Attachment,
     image as image,
     document as document,
+    # Provider config
+    ProviderConfig as ProviderConfig,
     # Protocols
     AgentProtocol as AgentProtocol,
     # Errors
@@ -71,6 +82,9 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 6 — Providers
+    "FallbackConfig",
+    "FallbackProviderAdapter",
     # Phase 1 — @Tool decorator
     "Tool",
     "ToolDef",
@@ -79,6 +93,10 @@ __all__ = [
     "discover_tools_in_files",
     "load_local_tools",
     "_registry",
+    # PR 5 — lifespan
+    "startup",
+    "shutdown",
+    "lifespan",
     # PR 1 — types
     "AgentResult",
     "StreamEvent",
@@ -89,6 +107,7 @@ __all__ = [
     "Attachment",
     "image",
     "document",
+    "ProviderConfig",
     "AgentProtocol",
     "NinetrixError",
     "CredentialError",

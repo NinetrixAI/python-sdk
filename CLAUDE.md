@@ -6,7 +6,12 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 2** — `_internals/networking.py` (not started)
+**Current PR: 7** — `observability/logger.py`
+**PR 6 done:** `providers/` — AnthropicAdapter, OpenAIAdapter, GoogleAdapter, LiteLLMAdapter, FallbackProviderAdapter
+**PR 5 done:** `_internals/http.py` + `_internals/lifespan.py`
+**PR 4 done:** `_internals/auth.py`
+**PR 3 done:** `_internals/config.py`
+**PR 2 done:** `_internals/networking.py`
 **PR 1 done:** `_internals/types.py` + `py.typed`
 **Phase 1 done:** `@Tool` decorator (`tool.py`, `registry.py`, `schema.py`, `discover.py`)
 **Full plan:** `../plans/sdk-phase-2-3-full-architecture.md`
@@ -100,10 +105,10 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | PR | Files | Notes | Status |
 |----|-------|-------|--------|
 | 1 | `_internals/types.py` + `py.typed` | + `AgentProtocol` Protocol | ✅ |
-| 2 | `_internals/networking.py` | RetryPolicy, CircuitBreaker | ⬜ |
-| 3 | `_internals/config.py` | NinetrixConfig layered resolution | ⬜ |
-| 4 | `_internals/auth.py` | CredentialStore | ⬜ |
-| 5 | `_internals/http.py` + `_internals/lifespan.py` | httpx singleton + SIGTERM | ⬜ |
+| 2 | `_internals/networking.py` | RetryPolicy, CircuitBreaker | ✅ |
+| 3 | `_internals/config.py` | NinetrixConfig layered resolution | ✅ |
+| 4 | `_internals/auth.py` | CredentialStore | ✅ |
+| 5 | `_internals/http.py` + `_internals/lifespan.py` | httpx singleton + SIGTERM | ✅ |
 | 6 | `providers/` | All adapters + fallback + attachments + structured output | ⬜ |
 | 7 | `observability/logger.py` | | ⬜ |
 | 8 | `observability/telemetry.py` | | ⬜ |
