@@ -179,6 +179,27 @@ print("✓ PR 7: NinetrixLogger")
 
 
 # =============================================================================
+# PR 8 — Telemetry
+# =============================================================================
+
+from ninetrix.observability.telemetry import TelemetryEvent, TelemetryCollector, record_event
+from ninetrix import TelemetryEvent as TE, record_event as re_fn
+assert TE is TelemetryEvent
+assert re_fn is record_event
+
+evt = TelemetryEvent(event="agent_run", provider="anthropic", success=True)
+assert evt.event == "agent_run"
+assert evt.provider == "anthropic"
+d = evt.to_dict()
+assert "machine_id" in d and len(d["machine_id"]) == 16
+
+# record_event convenience wrapper
+record_event("usage_test", provider="openai", tokens_used=100, success=True)
+
+print("✓ PR 8: Telemetry")
+
+
+# =============================================================================
 # PR 13 — MessageHistory + BudgetTracker
 # =============================================================================
 

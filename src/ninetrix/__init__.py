@@ -56,6 +56,11 @@ from ninetrix.observability.logger import (
     enable_debug as enable_debug,
     get_logger as get_logger,
 )
+from ninetrix.observability.telemetry import (
+    TelemetryEvent as TelemetryEvent,
+    TelemetryCollector as TelemetryCollector,
+    record_event as record_event,
+)
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -87,6 +92,10 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 8 — Telemetry
+    "TelemetryEvent",
+    "TelemetryCollector",
+    "record_event",
     # PR 7 — Logger
     "NinetrixLogger",
     "enable_debug",
