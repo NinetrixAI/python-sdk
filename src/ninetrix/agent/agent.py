@@ -155,6 +155,7 @@ class Agent(Generic[T_Output]):
         output_type: Any = None,
         output_retries: int = 1,
         max_turns: int = 20,
+        execution_mode: str = "direct",
         max_budget_usd: float = 0.0,
         temperature: float = 0.0,
         max_tokens: int = 8192,
@@ -180,6 +181,7 @@ class Agent(Generic[T_Output]):
             output_type=output_type,
             output_retries=output_retries,
             max_turns=max_turns,
+            execution_mode=execution_mode,
             max_budget_usd=max_budget_usd,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -538,6 +540,50 @@ class Agent(Generic[T_Output]):
                 pass  # not yet implemented — fall through
 
         return InMemoryCheckpointer()
+
+    # ------------------------------------------------------------------
+    # YAML round-trip
+    # ------------------------------------------------------------------
+
+    def to_yaml(self) -> str:
+        """Serialise the agent configuration to an agentfile.yaml string.
+
+        The returned string is valid agentfile.yaml that can be:
+        - Round-tripped through :meth:`from_yaml`
+        - Passed to ``ninetrix build`` (CLI)
+
+        Returns:
+            YAML string with a single ``agents:`` entry.
+
+        Example::
+
+            agent = Agent(name="analyst", provider="anthropic", role="Data analyst")
+            print(agent.to_yaml())
+            Path("agentfile.yaml").write_text(agent.to_yaml())
+        """
+        from ninetrix.export.writer import agent_to_yaml
+        return agent_to_yaml(self.config)
+
+    @classmethod
+    def from_yaml(cls, path: str) -> "Agent":
+        """Load an Agent from an agentfile.yaml file.
+
+        Parses the first (or only) agent entry in the ``agents:`` block.
+        ``${ENV_VAR}`` placeholders in string values are expanded.
+
+        Args:
+            path: Filesystem path to an agentfile.yaml file.
+
+        Returns:
+            A configured :class:`Agent` instance.
+
+        Example::
+
+            agent = Agent.from_yaml("agentfile.yaml")
+            result = agent.run("Summarise Q1 results")
+        """
+        from ninetrix.export.loader import load_agent_from_yaml
+        return load_agent_from_yaml(path)
 
     # ------------------------------------------------------------------
     # Dunder helpers

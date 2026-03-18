@@ -6,7 +6,8 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 19** — `export/writer.py` + `export/loader.py` (YAML round-trip)
+**Current PR: 20** — `observability/events.py` + `observability/hooks.py`
+**PR 19 done:** `export/writer.py` + `export/loader.py` — agent_to_yaml, load_agent_from_yaml, Agent.to_yaml/from_yaml
 **PR 18 done:** `agent/config.py` + `agent/agent.py` + `agent/introspection.py` — Agent, AgentConfig, info/validate/dry_run
 **PR 17 done:** `checkpoint/base.py` + `checkpoint/memory.py` — Checkpointer ABC + InMemoryCheckpointer
 **PR 16 done:** `runtime/runner.py` — AgentRunner, RunnerConfig, direct mode, structured output parse+retry
@@ -131,7 +132,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 16 | `runtime/runner.py` | Direct mode + structured output | ✅ |
 | 17 | `checkpoint/base.py` + `checkpoint/memory.py` | | ⬜ |
 | 18 | `agent/config.py` + `agent/agent.py` + `agent/introspection.py` | `_build_runner()`, validate/dry_run/info | ✅ |
-| **19** | **`export/writer.py` + `export/loader.py`** | **Moved from 28 — YAML is core** | ⬜ |
+| **19** | **`export/writer.py` + `export/loader.py`** | **Moved from 28 — YAML is core** | ✅ |
 | 20 | `observability/events.py` + `observability/hooks.py` | | ⬜ |
 | 21 | `observability/streaming.py` | | ⬜ |
 | **22** | **`client/local.py` + `client/remote.py`** | **AgentClient + RemoteAgent — full AgentProtocol polymorphism** | ⬜ |

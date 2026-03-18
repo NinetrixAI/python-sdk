@@ -348,7 +348,39 @@ print("✓ PR 18: Agent (info / validate / dry_run)")
 
 
 # =============================================================================
-# PR 18 — Events + Hooks
+# PR 19 — YAML round-trip
+# =============================================================================
+
+import tempfile, os
+from ninetrix import agent_to_yaml, load_agent_from_yaml, Agent as _Agent19
+
+_a19 = _Agent19(
+    name="roundtrip-bot",
+    provider="anthropic",
+    model="claude-sonnet-4-6",
+    role="Data analyst",
+    goal="Answer questions.",
+    mcp_tools=["tavily"],
+    max_budget_usd=1.0,
+)
+_yaml_text = _a19.to_yaml()
+assert "roundtrip-bot" in _yaml_text
+assert "mcp://tavily" in _yaml_text
+
+with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as _f:
+    _f.write(_yaml_text)
+    _tmp = _f.name
+
+_a19b = load_agent_from_yaml(_tmp)
+os.unlink(_tmp)
+assert _a19b.name == "roundtrip-bot"
+assert _a19b.config.role == "Data analyst"
+assert "tavily" in _a19b.config.mcp_tools
+print("✓ PR 19: YAML round-trip (to_yaml / from_yaml)")
+
+
+# =============================================================================
+# PR 20 — Events + Hooks
 # =============================================================================
 
 # Uncomment when PR 18 lands:

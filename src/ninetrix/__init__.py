@@ -84,6 +84,11 @@ from ninetrix.agent.introspection import (
     DryRunResult as DryRunResult,
 )
 from ninetrix.agent.agent import Agent as Agent
+from ninetrix.export.writer import agent_to_yaml as agent_to_yaml
+from ninetrix.export.loader import (
+    load_agent_from_yaml as load_agent_from_yaml,
+    load_all_agents_from_yaml as load_all_agents_from_yaml,
+)
 from ninetrix.runtime.dispatcher import (
     ToolSource as ToolSource,
     ToolDispatcher as ToolDispatcher,
@@ -122,6 +127,10 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 19 — YAML round-trip
+    "agent_to_yaml",
+    "load_agent_from_yaml",
+    "load_all_agents_from_yaml",
     # PR 18 — Agent + AgentConfig + introspection
     "Agent",
     "AgentConfig",
