@@ -222,7 +222,30 @@ print("✓ PR 9: ErrorContext")
 
 
 # =============================================================================
-# PR 13 — MessageHistory + BudgetTracker
+# PR 13 — TenantContext
+# =============================================================================
+
+from ninetrix._internals.tenant import TenantContext, set_tenant, get_tenant, require_tenant, tenant_scope
+from ninetrix import TenantContext as TC, tenant_scope as ts
+assert TC is TenantContext
+assert ts is tenant_scope
+
+import asyncio as _asyncio
+
+async def _test_tenant():
+    tc = TenantContext(workspace_id="ws-example", api_key="nxt_test")
+    async with tenant_scope(tc) as active:
+        assert active is tc
+        assert get_tenant() is tc
+        assert require_tenant().workspace_id == "ws-example"
+    assert get_tenant() is None
+
+_asyncio.run(_test_tenant())
+print("✓ PR 13: TenantContext")
+
+
+# =============================================================================
+# PR 14 — MessageHistory + BudgetTracker
 # =============================================================================
 
 # Uncomment when PR 13 lands:

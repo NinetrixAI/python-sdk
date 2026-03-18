@@ -6,7 +6,8 @@ Read this at the start of every session before touching any code.
 
 ## Current Status
 
-**Current PR: 10** — `middleware/pipeline.py`
+**Current PR: 14** — `runtime/history.py` + `runtime/budget.py` (skipped MW 10-12)
+**PR 13 done:** `_internals/tenant.py` — TenantContext, set_tenant, get_tenant, require_tenant, tenant_scope
 **PR 9 done:** `observability/errors.py` — ErrorContext, error_context
 **PR 8 done:** `observability/telemetry.py` — TelemetryCollector, record_event, opt-out
 **PR 7 done:** `observability/logger.py` — NinetrixLogger, enable_debug, get_logger
@@ -119,7 +120,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 10 | `middleware/pipeline.py` | | ⬜ |
 | 11 | `middleware/builtins.py` | | ⬜ |
 | 12 | `middleware/tools.py` | | ⬜ |
-| **13** | **`_internals/tenant.py`** | **TenantContext + set_tenant + tenant_scope — NEW** | ⬜ |
+| **13** | **`_internals/tenant.py`** | **TenantContext + set_tenant + tenant_scope — NEW** | ✅ |
 | 14 | `runtime/history.py` + `runtime/budget.py` | | ⬜ |
 | 15 | `tools/context.py` + `runtime/dispatcher.py` | Local + **RegistryToolSource** (lazy skill loading) | ⬜ |
 | 16 | `runtime/runner.py` | Direct mode + structured output | ⬜ |

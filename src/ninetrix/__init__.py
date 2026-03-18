@@ -65,6 +65,13 @@ from ninetrix.observability.errors import (
     ErrorContext as ErrorContext,
     error_context as error_context,
 )
+from ninetrix._internals.tenant import (
+    TenantContext as TenantContext,
+    set_tenant as set_tenant,
+    get_tenant as get_tenant,
+    require_tenant as require_tenant,
+    tenant_scope as tenant_scope,
+)
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -96,6 +103,12 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # PR 13 — TenantContext
+    "TenantContext",
+    "set_tenant",
+    "get_tenant",
+    "require_tenant",
+    "tenant_scope",
     # PR 9 — ErrorContext
     "ErrorContext",
     "error_context",
