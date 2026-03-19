@@ -122,10 +122,20 @@ class AgentConfig:
 
     @property
     def system_prompt(self) -> str:
-        """Assemble the system prompt from role/goal/instructions/constraints."""
+        """Assemble the system prompt from role/goal/instructions/constraints.
+
+        When ``role`` is absent but ``description`` is set, a minimal system
+        prompt is derived automatically so routing-only agents still have
+        sensible behaviour::
+
+            nx.agent("billing", description="Handles invoices and payments")
+            # system_prompt → "You are a helpful assistant. Handles invoices and payments."
+        """
         parts: list[str] = []
         if self.role:
             parts.append(f"You are a {self.role}.")
+        elif self.description:
+            parts.append(f"You are a helpful assistant. {self.description}.")
         if self.goal:
             parts.append(f"Goal: {self.goal}")
         if self.instructions:

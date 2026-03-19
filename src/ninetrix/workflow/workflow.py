@@ -36,10 +36,28 @@ import time
 import uuid
 from contextvars import ContextVar
 from contextlib import AbstractAsyncContextManager
-from typing import Any, Callable, overload
+from typing import Any, Callable, NoReturn, TypeVar, overload
 
 from ninetrix._internals.types import AgentResult, WorkflowResult
 from ninetrix.workflow.context import WorkflowContext, _StepResult
+
+T = TypeVar("T")
+
+
+# ---------------------------------------------------------------------------
+# WorkflowTerminated — raised by Workflow.terminate(), caught by WorkflowRunner
+# ---------------------------------------------------------------------------
+
+class WorkflowTerminated(Exception):
+    """Raised by :func:`Workflow.terminate` to signal early workflow exit.
+
+    Never catch this in user code — the :class:`WorkflowRunner` handles it
+    and sets ``WorkflowResult.terminated = True``.
+    """
+
+    def __init__(self, reason: str = "") -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +167,14 @@ class WorkflowRunner:
         )
 
         token = _current_ctx.set(ctx)
+        terminated = False
+        termination_reason = ""
+        output: Any = None
         try:
             output = await self._fn(*args, **kwargs)
+        except WorkflowTerminated as exc:
+            terminated = True
+            termination_reason = exc.reason
         finally:
             _current_ctx.reset(token)
             if checkpointer is not None and self._injected_checkpointer is None:
@@ -179,6 +203,8 @@ class WorkflowRunner:
             skipped_steps=list(ctx._skipped_steps),
             budget_remaining_usd=budget_remaining,
             budget_limit_usd=self._max_budget_usd,
+            terminated=terminated,
+            termination_reason=termination_reason,
         )
 
     # ------------------------------------------------------------------
@@ -330,6 +356,137 @@ class _WorkflowDecorator:
     ) -> Any:
         """Conditional branch between two async callables."""
         return await _get_ctx().branch(condition, if_true=if_true, if_false=if_false)
+
+    async def run_step(self, name: str, fn: Callable[[], Any]) -> Any:
+        """Execute *fn* and cache its result under *name*.
+
+        On the first run, ``fn`` is awaited and its result is persisted (durable
+        mode) or stored in memory (non-durable).  On subsequent runs with the
+        same ``thread_id``, the cached result is returned immediately — ``fn``
+        is **not** called again.
+
+        Return type matches whatever ``fn()`` returns — fully generic.  When
+        ``fn`` returns an :class:`~ninetrix.AgentResult`, the caller receives
+        the full ``AgentResult`` and accesses ``.output`` explicitly::
+
+            result = await Workflow.run_step("research", lambda: agent.arun(query))
+            print(result.output)   # str or Pydantic model depending on output_type
+
+        For plain-value lambdas the result is returned as-is::
+
+            score = await Workflow.run_step("score", lambda: calculate(user_id))
+            print(score + 10)
+
+        Args:
+            name: Unique step name within this workflow run.
+            fn:   Zero-argument async callable (lambda or ``async def``).
+
+        Returns:
+            Whatever ``fn()`` returns, or the cached value from a prior run.
+        """
+        ctx = _get_ctx()
+        # Resume path: return cached result without calling fn
+        is_cached = ctx._durable and name in ctx._cached_steps
+        if is_cached:
+            ctx._skipped_steps.append(name)
+            return ctx._cached_steps[name]
+
+        # Fresh path: execute fn, persist result
+        ctx._step_index += 1
+        result = await fn()
+        ctx._completed_steps.append(name)
+        ctx._step_results[name] = result
+
+        if ctx._durable and ctx._checkpointer is not None:
+            await ctx._checkpointer.save_step(
+                thread_id=ctx._thread_id,
+                step_name=name,
+                step_index=ctx._step_index,
+                result=result,
+                status="completed",
+            )
+
+        return result
+
+    def terminate(self, reason: str = "") -> NoReturn:
+        """Abort the workflow early with an optional reason.
+
+        The :class:`WorkflowRunner` catches the internal exception and returns
+        a :class:`~ninetrix.WorkflowResult` with ``terminated=True`` and
+        ``termination_reason`` set to *reason*.
+
+        Use this to signal a **failure or guard condition** — semantically
+        different from ``return "..."`` which signals a successful result::
+
+            is_safe = await Workflow.run_step("check", lambda: moderator.arun(text))
+            if is_safe.output.strip().upper() != "PASS":
+                return Workflow.terminate("Failed safety check")
+
+        Callers check the result::
+
+            result = await pipeline.arun(text, thread_id="pub-001")
+            if result.terminated:
+                print(f"Blocked: {result.termination_reason}")
+            else:
+                print(result.output)
+
+        Args:
+            reason: Human-readable explanation of why the workflow was stopped.
+        """
+        raise WorkflowTerminated(reason)
+
+    async def map(
+        self,
+        agent: Any,
+        items: list[Any],
+        *,
+        prefix: str = "",
+        concurrency: int = 5,
+        step_prefix: str | None = None,
+    ) -> list[Any]:
+        """Fan-out *agent* over *items* with a concurrency limit.
+
+        Each item is converted to a prompt string: ``f"{prefix}{item}"``.
+        Results are returned in the same order as *items*.
+
+        When *step_prefix* is set, each item becomes a named durable step
+        (``{step_prefix}_0``, ``{step_prefix}_1``, …).  Crashed runs resume
+        from the first un-cached item.
+
+        Must be called inside a ``@Workflow``-decorated function.
+
+        Args:
+            agent:        Agent (or any :class:`~ninetrix.AgentProtocol`) to run.
+            items:        List of input items.
+            prefix:       String prepended to each item when building the prompt.
+            concurrency:  Maximum simultaneous ``arun`` calls.
+            step_prefix:  When set, makes each item a named durable step.
+
+        Returns:
+            ``list[AgentResult]`` in the same order as *items*.
+
+        Example::
+
+            results = await Workflow.map(
+                researcher,
+                topics,
+                prefix="Research in depth: ",
+                concurrency=3,
+            )
+            combined = "\\n\\n".join(r.output for r in results)
+        """
+        _get_ctx()  # enforce: must be called inside a @Workflow function
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def _run_one(i: int, item: Any) -> Any:
+            prompt = f"{prefix}{item}" if prefix else str(item)
+            async with semaphore:
+                if step_prefix is not None:
+                    step_name = f"{step_prefix}_{i}"
+                    return await self.run_step(step_name, lambda: agent.arun(prompt))
+                return await agent.arun(prompt)
+
+        return list(await asyncio.gather(*[_run_one(i, item) for i, item in enumerate(items)]))
 
     def step(
         self,

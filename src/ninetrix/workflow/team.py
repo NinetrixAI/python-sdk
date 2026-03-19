@@ -47,6 +47,7 @@ class TeamResult:
     Attributes:
         output:       The agent's final response text.
         routed_to:    Name of the agent that handled the request.
+        agent_name:   Alias for ``routed_to`` — preferred in v2 code.
         agent_result: Full :class:`~ninetrix.AgentResult` from the chosen agent.
         thread_id:    The thread identifier used for this run.
     """
@@ -54,6 +55,11 @@ class TeamResult:
     routed_to: str
     agent_result: AgentResult
     thread_id: str = ""
+
+    @property
+    def agent_name(self) -> str:
+        """Which agent handled this request (alias for ``routed_to``)."""
+        return self.routed_to
 
 
 # ---------------------------------------------------------------------------

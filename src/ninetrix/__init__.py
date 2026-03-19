@@ -1,40 +1,206 @@
 """
-Ninetrix SDK — Python primitives for building AI agent tools.
+Ninetrix SDK — developer API for building production AI agents.
 
-Phase 1: @Tool decorator
-    Define Python functions as agent-callable tools. They are auto-discovered
-    by ``ninetrix build``, bundled into the Docker image, and dispatched at
-    runtime alongside MCP tools.
+Version: 0.1.0
+Install:  pip install ninetrix-sdk
+Extras:   pip install 'ninetrix-sdk[serve]'     # Agent.serve() — FastAPI HTTP server
+          pip install 'ninetrix-sdk[otel]'      # OpenTelemetry tracing
+          pip install 'ninetrix-sdk[providers]' # anthropic + openai + google + litellm
 
-Phase 2 (upcoming): Agent + Workflow
-    Define full agents and complex workflows in Python.
-
-Quick start::
+──────────────────────────────────────────────────────────────────
+1. DEFINE TOOLS  (@Tool)
+──────────────────────────────────────────────────────────────────
+Decorate any Python function. The decorator registers it without
+wrapping — full type inference and IDE completion are preserved::
 
     from ninetrix import Tool
 
     @Tool
-    def query_customers(sql: str, limit: int = 100) -> list[dict]:
-        \"\"\"Run a read-only SQL query against the customer database.
+    def get_price(ticker: str) -> dict:
+        \"\"\"Fetch the current stock price.
 
         Args:
-            sql: A valid SELECT statement.
-            limit: Maximum rows to return.
+            ticker: Stock ticker symbol, e.g. \"AAPL\".
         \"\"\"
-        return db.execute(sql, limit=limit)
+        return {"ticker": ticker, "price": 189.50}
 
-Reference the tool in ``agentfile.yaml``::
+    # Group related tools into a Toolkit
+    from ninetrix import Toolkit
+    market_tools = Toolkit("market", tools=[get_price, get_volume])
 
-    tools:
-      - name: query_customers
-        source: ./tools/db_tools.py
 
-Then build and run as usual::
+──────────────────────────────────────────────────────────────────
+2. BUILD AGENTS  (Agent)
+──────────────────────────────────────────────────────────────────
+::
 
-    ninetrix build
-    ninetrix run
+    from ninetrix import Agent
+
+    analyst = Agent(
+        name="equity-analyst",
+        provider="anthropic",          # "openai" | "google" | "litellm"
+        model="claude-haiku-4-5-20251001",
+        role="You are a concise equity research analyst.",
+        tools=[get_price, market_tools],
+        # optional budgets:
+        max_turns=10,
+        budget_tokens=50_000,
+        budget_usd=0.05,
+    )
+
+    # Async run (preferred)
+    result = await analyst.arun("What is Apple's current price?")
+    print(result.output)          # str (or Pydantic model if output_type= set)
+    print(result.tokens_used)     # int
+    print(result.cost_usd)        # float
+    print(result.thread_id)       # str — use to resume later
+
+    # Sync run (safe inside any event loop)
+    result = analyst.run("What is Apple's current price?")
+
+    # Streaming
+    async for event in analyst.stream("Summarise Apple"):
+        if event.type == "text_delta":
+            print(event.text, end="", flush=True)
+
+    # Introspection (no API call)
+    info   = analyst.info()        # AgentInfo
+    issues = await analyst.validate()   # list[ValidationIssue]
+    dry    = await analyst.dry_run("test prompt")   # DryRunResult
+
+    # Structured output — output becomes a Pydantic model instance
+    from pydantic import BaseModel
+    class Report(BaseModel):
+        summary: str
+        risk: str
+    typed_agent = Agent(..., output_type=Report)
+    result = await typed_agent.arun("Analyse AAPL")
+    print(result.output.risk)
+
+
+──────────────────────────────────────────────────────────────────
+3. COMPOSE WORKFLOWS  (@Workflow / Team)
+──────────────────────────────────────────────────────────────────
+Sequential pipeline with crash-resume checkpointing::
+
+    from ninetrix import Workflow, InMemoryCheckpointer
+
+    @Workflow(durable=True)
+    async def report_pipeline(query: str) -> str:
+        async with Workflow.step("research") as step:
+            if not step.is_cached:
+                result = await analyst.arun(query)
+                step.set(result.output)
+            research = step.value
+
+        async with Workflow.step("write") as step:
+            if not step.is_cached:
+                result = await writer.arun(research)
+                step.set(result.output)
+            return step.value
+
+    checkpointer = InMemoryCheckpointer()    # or PostgresCheckpointer
+    report_pipeline.inject_checkpointer(checkpointer)
+    result = await report_pipeline.arun(query, thread_id="run-001")
+
+Human-in-the-loop gate — halt and wait for approval::
+
+    async with Workflow.step("review", requires_approval=True) as step:
+        if not step.is_cached:
+            step.set({"draft": draft})
+            return "PENDING_APPROVAL"   # caller polls; re-run same thread_id
+        approved = step.value           # execution resumes here after approval
+
+LLM-based dynamic routing (Team)::
+
+    from ninetrix import Team
+    support = Team(
+        agents=[billing_agent, tech_agent, general_agent],
+        router_provider="anthropic",
+        router_model="claude-haiku-4-5-20251001",
+    )
+    result = await support.arun("I was charged twice this month.")
+    print(result.routed_to, result.output)
+
+
+──────────────────────────────────────────────────────────────────
+4. OBSERVE  (debug / OpenTelemetry)
+──────────────────────────────────────────────────────────────────
+Local development — pretty-printer to stderr::
+
+    from ninetrix import enable_debug
+    enable_debug(agent=analyst)    # pretty-prints every event for analyst
+    # or set NINETRIX_DEBUG=1 in the environment for all agents
+
+Production — OpenTelemetry to any OTLP backend::
+
+    from ninetrix import configure_otel
+    configure_otel(
+        endpoint="http://localhost:4317",   # Jaeger / Grafana Tempo / Datadog
+        service_name="my-agent-service",
+    )
+    # Every Agent in the process now emits spans automatically.
+    # Span tree per run:
+    #   ninetrix.agent.run
+    #   ├─ ninetrix.agent.turn   [turn=0, tokens=…]
+    #   │  └─ ninetrix.tool.call [tool=get_price]
+    #   └─ ninetrix.agent.turn   [turn=1, …]
+
+Subscribe to raw events::
+
+    from ninetrix import AgentEvent
+    analyst._event_bus.subscribe("tool.*", lambda e: print(e))
+    analyst._event_bus.subscribe("*",      lambda e: ...)   # every event
+
+
+──────────────────────────────────────────────────────────────────
+5. TEST  (MockTool / AgentSandbox)
+──────────────────────────────────────────────────────────────────
+::
+
+    from ninetrix import AgentSandbox, MockTool
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_analyst():
+        mock_price = MockTool("get_price", return_value={"price": 100.0})
+        async with AgentSandbox(analyst, tools=[mock_price]) as sb:
+            result = await sb.run("What is the price of AAPL?")
+        assert "100" in result.output
+        mock_price.assert_called_once_with(ticker="AAPL")
+
+
+──────────────────────────────────────────────────────────────────
+6. SERVE / DEPLOY  (Agent.serve / Agent.deploy)
+──────────────────────────────────────────────────────────────────
+::
+
+    # Expose agent as FastAPI HTTP server  (requires: pip install 'ninetrix-sdk[serve]')
+    from ninetrix import serve_agent
+    serve_agent(analyst, host="0.0.0.0", port=9000)
+    # POST /invoke   {"prompt": "…", "thread_id": "…"}
+    # GET  /info
+    # GET  /health
+
+    # Deploy to Ninetrix Cloud
+    await analyst.deploy(api_key="nxt-…")
+
+
+──────────────────────────────────────────────────────────────────
+Full examples: sdk/examples/
+  01_simple_agent.py          — @Tool + Agent.arun + Agent.run
+  02_parallel_research.py     — fan-out parallel agents
+  03_durable_pipeline.py      — durable @Workflow + PostgresCheckpointer
+  04_multi_agent_team.py      — Team dynamic routing
+  05_toolkit_streaming.py     — Toolkit + streaming
+  06_streaming.py             — event-by-event streaming
+  07_otel_tracing.py          — configure_otel + Jaeger + enable_debug
+  08_hitl_approval.py         — HITL approval gate + approve/reject helpers
+  09_multi_agent_handoff.py   — coordinator → specialist → governance pipeline
+──────────────────────────────────────────────────────────────────
 """
 
+from ninetrix.context import Ninetrix as Ninetrix
 from ninetrix.tool import Tool as Tool
 from ninetrix.registry import ToolDef as ToolDef, ToolRegistry as ToolRegistry, _registry
 from ninetrix.discover import (
@@ -85,7 +251,11 @@ from ninetrix.runtime.budget import BudgetTracker as BudgetTracker, BudgetUsage 
 from ninetrix.runtime.runner import AgentRunner as AgentRunner, RunnerConfig as RunnerConfig
 from ninetrix.runtime.planner import Planner as Planner
 from ninetrix.workflow.context import WorkflowContext as WorkflowContext, WorkflowBudgetTracker as WorkflowBudgetTracker
-from ninetrix.workflow.workflow import Workflow as Workflow, WorkflowRunner as WorkflowRunner
+from ninetrix.workflow.workflow import (
+    Workflow as Workflow,
+    WorkflowRunner as WorkflowRunner,
+    WorkflowTerminated as WorkflowTerminated,
+)
 from ninetrix.workflow.team import Team as Team, TeamResult as TeamResult
 from ninetrix.tools.toolkit import Toolkit as Toolkit
 from ninetrix.checkpoint.base import Checkpointer as Checkpointer
@@ -151,6 +321,9 @@ from ninetrix._internals.types import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # v2 API — Ninetrix context + workflow improvements
+    "Ninetrix",
+    "WorkflowTerminated",
     # PR 32 — serve / build / deploy lifecycle methods
     "serve_agent",
     # PR 33 — debug pretty-printer
