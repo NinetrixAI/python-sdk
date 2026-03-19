@@ -260,6 +260,19 @@ class Agent(HooksMixin, Generic[T_Output]):
             :class:`~ninetrix._internals.types.AgentResult`
         """
         runner = await self._get_runner()
+
+        # Auto-wire reporter when no parent scope (workflow/team) set one.
+        from ninetrix._internals.trace import get_reporter, reporter_scope
+        if get_reporter() is None:
+            try:
+                from ninetrix.observability.reporter import RunnerReporter
+                _reporter = RunnerReporter.resolve()
+                if _reporter is not None:
+                    async with reporter_scope(_reporter):
+                        return await runner.run(message, thread_id=thread_id)
+            except Exception:
+                pass  # reporter setup must never block the agent
+
         return await runner.run(message, thread_id=thread_id)
 
     async def stream(

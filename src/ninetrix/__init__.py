@@ -280,6 +280,7 @@ from ninetrix.observability.otel import (
     attach_otel_to_bus as attach_otel_to_bus,
 )
 from ninetrix.observability.debug import attach_debug_listener as attach_debug_listener
+from ninetrix.observability.reporter import RunnerReporter as RunnerReporter
 from ninetrix.agent.server import serve_agent as serve_agent
 from ninetrix.runtime.dispatcher import (
     ToolSource as ToolSource,
@@ -324,6 +325,8 @@ __all__ = [
     # v2 API — Ninetrix context + workflow improvements
     "Ninetrix",
     "WorkflowTerminated",
+    # PR 33 — RunnerReporter
+    "RunnerReporter",
     # PR 32 — serve / build / deploy lifecycle methods
     "serve_agent",
     # PR 33 — debug pretty-printer

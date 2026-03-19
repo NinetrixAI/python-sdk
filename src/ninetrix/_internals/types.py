@@ -332,6 +332,40 @@ class LLMProviderAdapter(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# ReporterProtocol — L1 interface satisfied by RunnerReporter (L6).
+# Defined here so L3 (runner) can hold a typed reference without importing L6.
+# ---------------------------------------------------------------------------
+
+class ReporterProtocol(Protocol):
+    """Minimal interface the AgentRunner calls to report lifecycle events.
+
+    The concrete implementation is
+    :class:`~ninetrix.observability.reporter.RunnerReporter` at L6.
+    All methods must be fire-and-forget safe — they swallow every exception
+    internally so a broken reporter never crashes an agent run.
+    """
+
+    async def on_run_start(
+        self, *, thread_id: str, trace_id: str, parent_trace_id: str,
+        agent_id: str, model: str,
+    ) -> None: ...
+
+    async def on_checkpoint(
+        self, *, thread_id: str, trace_id: str, agent_id: str,
+        step_index: int, history: list, history_meta: list,
+        tokens_in: int, tokens_out: int, model: str,
+    ) -> None: ...
+
+    async def on_run_complete(
+        self, *, thread_id: str, trace_id: str, tokens_used: int, model: str,
+    ) -> None: ...
+
+    async def on_run_error(
+        self, *, thread_id: str, trace_id: str, error: str,
+    ) -> None: ...
+
+
+# ---------------------------------------------------------------------------
 # AgentProtocol — public, @runtime_checkable
 # Satisfied by Agent, AgentClient, and RemoteAgent.
 # Workflow and Team accept AgentProtocol — never Agent specifically.

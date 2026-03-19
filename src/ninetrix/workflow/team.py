@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ninetrix._internals.types import AgentResult, ProviderConfig
+from ninetrix._internals.trace import get_reporter, reporter_scope
 
 
 # ---------------------------------------------------------------------------
@@ -154,10 +155,53 @@ class Team:
             ``agent_result``.
         """
         thread_id = thread_id or uuid.uuid4().hex[:16]
+        team_trace_id = uuid.uuid4().hex[:16]
+
+        # Resolve reporter (inherit from parent scope or auto-resolve)
+        reporter = get_reporter()
+        if reporter is None:
+            try:
+                from ninetrix.observability.reporter import RunnerReporter
+                reporter = RunnerReporter.resolve()
+            except Exception:
+                reporter = None
+
+        if reporter is not None:
+            await reporter.on_team_start(
+                thread_id=thread_id,
+                trace_id=team_trace_id,
+                team_name=self.name,
+                agent_names=list(self._agents.keys()),
+            )
 
         routed_to = await self._route(message)
+
+        if reporter is not None:
+            await reporter.on_team_routed(
+                thread_id=thread_id,
+                trace_id=team_trace_id,
+                routed_to=routed_to,
+            )
+
         agent = self._agents[routed_to]
-        agent_result = await agent.arun(message, thread_id=thread_id)
+
+        # Run selected agent inside reporter scope so it links to this team run
+        async def _run_agent() -> AgentResult:
+            return await agent.arun(message, thread_id=thread_id)
+
+        if reporter is not None:
+            async with reporter_scope(reporter, trace_id=team_trace_id):
+                agent_result = await _run_agent()
+        else:
+            agent_result = await _run_agent()
+
+        if reporter is not None:
+            await reporter.on_team_complete(
+                thread_id=thread_id,
+                trace_id=team_trace_id,
+                routed_to=routed_to,
+                tokens_used=agent_result.tokens_used,
+            )
 
         return TeamResult(
             output=agent_result.output,

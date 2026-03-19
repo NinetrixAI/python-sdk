@@ -32,6 +32,8 @@ def _truncate(d: dict, max_len: int = 200) -> str:
     s = str(d)
     return s if len(s) <= max_len else s[:max_len] + "…"
 
+import datetime
+
 from ninetrix._internals.types import (
     AgentResult,
     CheckpointerProtocol,
@@ -39,9 +41,14 @@ from ninetrix._internals.types import (
     OutputParseError,
     ProviderConfig,
 )
+from ninetrix._internals.trace import get_reporter, get_current_trace
 from ninetrix.runtime.dispatcher import ToolDispatcher
 from ninetrix.runtime.history import MessageHistory
 from ninetrix.runtime.budget import BudgetTracker
+
+
+def _now_iso() -> str:
+    return datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +194,19 @@ class AgentRunner:
             ProviderError:       LLM API call failed.
         """
         thread_id = thread_id or uuid.uuid4().hex[:16]
+        trace_id = uuid.uuid4().hex[:16]
+        parent_trace_id = get_current_trace() or ""
+        reporter = get_reporter()
         self._budget.reset()
+
+        if reporter is not None:
+            await reporter.on_run_start(
+                thread_id=thread_id,
+                trace_id=trace_id,
+                parent_trace_id=parent_trace_id,
+                agent_id=self.config.name,
+                model=self.config.model,
+            )
 
         await self._emit("run.start", thread_id, {
             "agent_name": self.config.name,
@@ -208,11 +227,19 @@ class AgentRunner:
 
         # ── Assemble initial message list ─────────────────────────────
         history = MessageHistory(max_tokens=self.config.history_max_tokens)
+        # history_meta: parallel list to the full (untrimmed) history.
+        # Each entry is {"ts": ISO} for user/tool messages, plus
+        # {"tokens_in": N, "tokens_out": N} for assistant messages.
+        history_meta: list[dict] = []
+
         if self.config.system_prompt:
             history.append({"role": "system", "content": self.config.system_prompt})
+            history_meta.append({"ts": _now_iso()})
         for msg in restored:
             history.append(msg)
+            history_meta.append({"ts": _now_iso()})
         history.append({"role": "user", "content": message})
+        history_meta.append({"ts": _now_iso()})
 
         # ── Tool definitions + output schema ───────────────────────────
         tools = self.dispatcher.all_tool_definitions()
@@ -262,10 +289,15 @@ class AgentRunner:
                 model=self.config.model,
             )
 
-            # Append assistant message
+            # Append assistant message + meta
             history.append(_build_assistant_message(response))
+            history_meta.append({
+                "ts": _now_iso(),
+                "tokens_in": response.input_tokens,
+                "tokens_out": response.output_tokens,
+            })
 
-            # No tool calls → stop turn
+            # No tool calls → final turn — emit checkpoint and stop
             if not response.tool_calls:
                 final_content = response.content or ""
                 await self._emit("turn.end", thread_id, {
@@ -279,6 +311,21 @@ class AgentRunner:
                     f"in_tokens={response.input_tokens} out_tokens={response.output_tokens} "
                     f"thread_id={thread_id}"
                 )
+                if reporter is not None:
+                    _trimmed = history.trim()
+                    _meta_window = history_meta[-len(_trimmed):]
+                    usage_now = self._budget.usage()
+                    await reporter.on_checkpoint(
+                        thread_id=thread_id,
+                        trace_id=trace_id,
+                        agent_id=self.config.name,
+                        step_index=steps,
+                        history=_trimmed,
+                        history_meta=_meta_window,
+                        tokens_in=usage_now.input_tokens,
+                        tokens_out=usage_now.output_tokens,
+                        model=self.config.model,
+                    )
                 break
 
             # Dispatch tool calls
@@ -317,6 +364,24 @@ class AgentRunner:
                     "tool_call_id": tc.id,
                     "content": result_str,
                 })
+                history_meta.append({"ts": _now_iso()})
+
+            # Emit mid-run checkpoint (shows tool call progress in dashboard)
+            if reporter is not None:
+                _trimmed = history.trim()
+                _meta_window = history_meta[-len(_trimmed):]
+                usage_now = self._budget.usage()
+                await reporter.on_checkpoint(
+                    thread_id=thread_id,
+                    trace_id=trace_id,
+                    agent_id=self.config.name,
+                    step_index=steps,
+                    history=_trimmed,
+                    history_meta=_meta_window,
+                    tokens_in=usage_now.input_tokens,
+                    tokens_out=usage_now.output_tokens,
+                    model=self.config.model,
+                )
 
         else:
             # Reached max_turns without a stop
@@ -355,6 +420,14 @@ class AgentRunner:
             f"run.end agent={self.config.name} turns={steps} tokens={usage.total_tokens} "
             f"cost_usd={round(usage.cost_usd, 6)} thread_id={thread_id}"
         )
+
+        if reporter is not None:
+            await reporter.on_run_complete(
+                thread_id=thread_id,
+                trace_id=trace_id,
+                tokens_used=usage.total_tokens,
+                model=self.config.model,
+            )
 
         return AgentResult(
             output=parsed_output,

@@ -39,9 +39,19 @@ from contextlib import AbstractAsyncContextManager
 from typing import Any, Callable, NoReturn, TypeVar, overload
 
 from ninetrix._internals.types import AgentResult, WorkflowResult
+from ninetrix._internals.trace import get_reporter, get_current_trace, reporter_scope
 from ninetrix.workflow.context import WorkflowContext, _StepResult
 
 T = TypeVar("T")
+
+
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+@asynccontextmanager
+async def _null_scope() -> AsyncIterator[None]:
+    """No-op async context manager — used when reporter is None."""
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +160,16 @@ class WorkflowRunner:
         thread_id = thread_id or uuid.uuid4().hex[:16]
         t0 = time.monotonic()
 
+        # ── Reporter setup ────────────────────────────────────────────
+        workflow_trace_id = uuid.uuid4().hex[:16]
+        reporter = get_reporter()
+        if reporter is None:
+            try:
+                from ninetrix.observability.reporter import RunnerReporter
+                reporter = RunnerReporter.resolve()
+            except Exception:
+                reporter = None
+
         # ── Durable mode setup ────────────────────────────────────────
         checkpointer = None
         cached_steps: dict = {}
@@ -171,7 +191,14 @@ class WorkflowRunner:
         termination_reason = ""
         output: Any = None
         try:
-            output = await self._fn(*args, **kwargs)
+            if reporter is not None:
+                await reporter.on_workflow_start(
+                    thread_id=thread_id,
+                    trace_id=workflow_trace_id,
+                    workflow_name=self._name,
+                )
+            async with reporter_scope(reporter, trace_id=workflow_trace_id) if reporter else _null_scope():
+                output = await self._fn(*args, **kwargs)
         except WorkflowTerminated as exc:
             terminated = True
             termination_reason = exc.reason
@@ -182,6 +209,16 @@ class WorkflowRunner:
                     await checkpointer.disconnect()
                 except Exception:
                     pass
+
+        if reporter is not None:
+            await reporter.on_workflow_complete(
+                thread_id=thread_id,
+                trace_id=workflow_trace_id,
+                completed_steps=list(ctx._completed_steps),
+                skipped_steps=list(ctx._skipped_steps),
+                terminated=terminated,
+                reason=termination_reason,
+            )
 
         # Step results are plain values (not AgentResult) in durable mode
         total_tokens = 0
@@ -385,13 +422,30 @@ class _WorkflowDecorator:
             Whatever ``fn()`` returns, or the cached value from a prior run.
         """
         ctx = _get_ctx()
+        reporter = get_reporter()
+        trace_id = get_current_trace() or ""
+
         # Resume path: return cached result without calling fn
         is_cached = ctx._durable and name in ctx._cached_steps
         if is_cached:
             ctx._skipped_steps.append(name)
+            if reporter is not None:
+                await reporter.on_workflow_step_completed(
+                    thread_id=ctx._thread_id,
+                    trace_id=trace_id,
+                    step_name=name,
+                    cached=True,
+                )
             return ctx._cached_steps[name]
 
         # Fresh path: execute fn, persist result
+        if reporter is not None:
+            await reporter.on_workflow_step_started(
+                thread_id=ctx._thread_id,
+                trace_id=trace_id,
+                step_name=name,
+            )
+
         ctx._step_index += 1
         result = await fn()
         ctx._completed_steps.append(name)
@@ -404,6 +458,14 @@ class _WorkflowDecorator:
                 step_index=ctx._step_index,
                 result=result,
                 status="completed",
+            )
+
+        if reporter is not None:
+            await reporter.on_workflow_step_completed(
+                thread_id=ctx._thread_id,
+                trace_id=trace_id,
+                step_name=name,
+                cached=False,
             )
 
         return result
@@ -475,7 +537,19 @@ class _WorkflowDecorator:
             )
             combined = "\\n\\n".join(r.output for r in results)
         """
-        _get_ctx()  # enforce: must be called inside a @Workflow function
+        ctx = _get_ctx()  # enforce: must be called inside a @Workflow function
+        reporter = get_reporter()
+        trace_id = get_current_trace() or ""
+        effective_prefix = step_prefix or ""
+
+        if reporter is not None and effective_prefix:
+            await reporter.on_workflow_map_started(
+                thread_id=ctx._thread_id,
+                trace_id=trace_id,
+                step_prefix=effective_prefix,
+                item_count=len(items),
+            )
+
         semaphore = asyncio.Semaphore(concurrency)
 
         async def _run_one(i: int, item: Any) -> Any:
@@ -486,7 +560,22 @@ class _WorkflowDecorator:
                     return await self.run_step(step_name, lambda: agent.arun(prompt))
                 return await agent.arun(prompt)
 
-        return list(await asyncio.gather(*[_run_one(i, item) for i, item in enumerate(items)]))
+        results = list(await asyncio.gather(*[_run_one(i, item) for i, item in enumerate(items)]))
+
+        if reporter is not None and effective_prefix:
+            cached_count = sum(
+                1 for n in (f"{effective_prefix}_{i}" for i in range(len(items)))
+                if n in ctx._skipped_steps
+            )
+            await reporter.on_workflow_map_completed(
+                thread_id=ctx._thread_id,
+                trace_id=trace_id,
+                step_prefix=effective_prefix,
+                completed=len(items) - cached_count,
+                cached=cached_count,
+            )
+
+        return results
 
     def step(
         self,
