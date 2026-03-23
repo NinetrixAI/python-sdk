@@ -51,42 +51,39 @@ def _clear_tenant() -> None:
 
 class TestTenantContext:
     def test_required_field(self):
-        tc = TenantContext(workspace_id="ws-1")
-        assert tc.workspace_id == "ws-1"
+        tc = TenantContext(org_id="ws-1")
+        assert tc.org_id == "ws-1"
 
     def test_defaults(self):
-        tc = TenantContext(workspace_id="ws-1")
-        assert tc.org_id == ""
+        tc = TenantContext(org_id="ws-1")
         assert tc.api_key == ""
         assert tc.region == "us"
         assert tc.db_schema == "public"
 
     def test_all_fields(self):
         tc = TenantContext(
-            workspace_id="ws-2",
-            org_id="org-x",
+            org_id="ws-2",
             api_key="nxt_abc",
             region="eu",
             db_schema="tenant_ws2",
         )
-        assert tc.org_id == "org-x"
         assert tc.api_key == "nxt_abc"
         assert tc.region == "eu"
         assert tc.db_schema == "tenant_ws2"
 
     def test_frozen(self):
-        tc = TenantContext(workspace_id="ws-3")
+        tc = TenantContext(org_id="ws-3")
         with pytest.raises((AttributeError, TypeError)):
-            tc.workspace_id = "mutated"  # type: ignore[misc]
+            tc.org_id = "mutated"  # type: ignore[misc]
 
     def test_equality(self):
-        a = TenantContext(workspace_id="ws-1", api_key="k1")
-        b = TenantContext(workspace_id="ws-1", api_key="k1")
+        a = TenantContext(org_id="ws-1", api_key="k1")
+        b = TenantContext(org_id="ws-1", api_key="k1")
         assert a == b
 
     def test_inequality(self):
-        a = TenantContext(workspace_id="ws-1")
-        b = TenantContext(workspace_id="ws-2")
+        a = TenantContext(org_id="ws-1")
+        b = TenantContext(org_id="ws-2")
         assert a != b
 
 
@@ -105,18 +102,18 @@ class TestSetGetTenant:
         assert get_tenant() is None
 
     def test_set_get_round_trip(self):
-        tc = TenantContext(workspace_id="ws-set")
+        tc = TenantContext(org_id="ws-set")
         set_tenant(tc)
         assert get_tenant() is tc
 
     def test_set_returns_token(self):
-        tc = TenantContext(workspace_id="ws-token")
+        tc = TenantContext(org_id="ws-token")
         token = set_tenant(tc)
         assert token is not None
 
     def test_token_can_restore_previous_value(self):
-        tc1 = TenantContext(workspace_id="ws-1")
-        tc2 = TenantContext(workspace_id="ws-2")
+        tc1 = TenantContext(org_id="ws-1")
+        tc2 = TenantContext(org_id="ws-2")
         set_tenant(tc1)
         token = set_tenant(tc2)
         assert get_tenant() is tc2
@@ -124,9 +121,9 @@ class TestSetGetTenant:
         assert get_tenant() is tc1
 
     def test_set_tenant_overwrites(self):
-        set_tenant(TenantContext(workspace_id="ws-a"))
-        set_tenant(TenantContext(workspace_id="ws-b"))
-        assert get_tenant().workspace_id == "ws-b"  # type: ignore[union-attr]
+        set_tenant(TenantContext(org_id="ws-a"))
+        set_tenant(TenantContext(org_id="ws-b"))
+        assert get_tenant().org_id == "ws-b"  # type: ignore[union-attr]
 
 
 # ===========================================================================
@@ -141,7 +138,7 @@ class TestRequireTenant:
         _clear_tenant()
 
     def test_returns_tenant_when_set(self):
-        tc = TenantContext(workspace_id="ws-req")
+        tc = TenantContext(org_id="ws-req")
         set_tenant(tc)
         assert require_tenant() is tc
 
@@ -176,19 +173,19 @@ class TestTenantScope:
         _clear_tenant()
 
     async def test_sets_tenant_inside_block(self):
-        tc = TenantContext(workspace_id="ws-scope")
+        tc = TenantContext(org_id="ws-scope")
         async with tenant_scope(tc):
             assert get_tenant() is tc
 
     async def test_restores_none_after_block(self):
-        tc = TenantContext(workspace_id="ws-scope")
+        tc = TenantContext(org_id="ws-scope")
         async with tenant_scope(tc):
             pass
         assert get_tenant() is None
 
     async def test_restores_previous_tenant_after_nested_block(self):
-        outer = TenantContext(workspace_id="ws-outer")
-        inner = TenantContext(workspace_id="ws-inner")
+        outer = TenantContext(org_id="ws-outer")
+        inner = TenantContext(org_id="ws-inner")
         async with tenant_scope(outer):
             async with tenant_scope(inner):
                 assert get_tenant() is inner
@@ -196,21 +193,21 @@ class TestTenantScope:
         assert get_tenant() is None
 
     async def test_restores_tenant_on_exception(self):
-        tc = TenantContext(workspace_id="ws-exc")
+        tc = TenantContext(org_id="ws-exc")
         with pytest.raises(ValueError):
             async with tenant_scope(tc):
                 raise ValueError("boom")
         assert get_tenant() is None
 
     async def test_yields_context(self):
-        tc = TenantContext(workspace_id="ws-yield")
+        tc = TenantContext(org_id="ws-yield")
         async with tenant_scope(tc) as yielded:
             assert yielded is tc
 
     async def test_three_levels_of_nesting(self):
-        t1 = TenantContext(workspace_id="ws-1")
-        t2 = TenantContext(workspace_id="ws-2")
-        t3 = TenantContext(workspace_id="ws-3")
+        t1 = TenantContext(org_id="ws-1")
+        t2 = TenantContext(org_id="ws-2")
+        t3 = TenantContext(org_id="ws-3")
         async with tenant_scope(t1):
             assert get_tenant() is t1
             async with tenant_scope(t2):
@@ -221,7 +218,7 @@ class TestTenantScope:
             assert get_tenant() is t1
 
     async def test_require_tenant_works_inside_scope(self):
-        tc = TenantContext(workspace_id="ws-req-scope")
+        tc = TenantContext(org_id="ws-req-scope")
         async with tenant_scope(tc):
             assert require_tenant() is tc
 
@@ -242,7 +239,7 @@ class TestTaskIsolation:
         results: list[TenantContext | None] = []
 
         async def task_a():
-            async with tenant_scope(TenantContext(workspace_id="ws-a")):
+            async with tenant_scope(TenantContext(org_id="ws-a")):
                 await asyncio.sleep(0)  # yield control
                 results.append(get_tenant())
 
@@ -252,8 +249,8 @@ class TestTaskIsolation:
             results.append(get_tenant())
 
         await asyncio.gather(task_a(), task_b())
-        # One result should have workspace_id "ws-a", the other None
-        ids = {r.workspace_id if r else None for r in results}
+        # One result should have org_id "ws-a", the other None
+        ids = {r.org_id if r else None for r in results}
         assert "ws-a" in ids
         assert None in ids
 
@@ -263,7 +260,7 @@ class TestTaskIsolation:
         The child sees the parent's tenant but cannot mutate the parent's
         context var.
         """
-        tc = TenantContext(workspace_id="ws-parent")
+        tc = TenantContext(org_id="ws-parent")
         token = set_tenant(tc)
         try:
             child_tenant: list[TenantContext | None] = []
@@ -290,18 +287,18 @@ class TestAutoInitFromEnv:
 
     def test_sets_tenant_when_both_env_vars_present(self):
         with patch.dict(os.environ, {
-            "NINETRIX_WORKSPACE_ID": "ws-env-123",
+            "NINETRIX_ORG_ID": "ws-env-123",
             "NINETRIX_API_KEY": "nxt_test_key",
         }):
             _auto_init_from_env()
         tc = get_tenant()
         assert tc is not None
-        assert tc.workspace_id == "ws-env-123"
+        assert tc.org_id == "ws-env-123"
         assert tc.api_key == "nxt_test_key"
 
-    def test_noop_when_workspace_id_missing(self):
+    def test_noop_when_org_id_missing(self):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("NINETRIX_WORKSPACE_ID", "NINETRIX_API_KEY")}
+               if k not in ("NINETRIX_ORG_ID", "NINETRIX_API_KEY")}
         env["NINETRIX_API_KEY"] = "nxt_key"
         with patch.dict(os.environ, env, clear=True):
             _auto_init_from_env()
@@ -309,15 +306,15 @@ class TestAutoInitFromEnv:
 
     def test_noop_when_api_key_missing(self):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("NINETRIX_WORKSPACE_ID", "NINETRIX_API_KEY")}
-        env["NINETRIX_WORKSPACE_ID"] = "ws-123"
+               if k not in ("NINETRIX_ORG_ID", "NINETRIX_API_KEY")}
+        env["NINETRIX_ORG_ID"] = "ws-123"
         with patch.dict(os.environ, env, clear=True):
             _auto_init_from_env()
         assert get_tenant() is None
 
     def test_noop_when_both_missing(self):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("NINETRIX_WORKSPACE_ID", "NINETRIX_API_KEY")}
+               if k not in ("NINETRIX_ORG_ID", "NINETRIX_API_KEY")}
         with patch.dict(os.environ, env, clear=True):
             _auto_init_from_env()
         assert get_tenant() is None

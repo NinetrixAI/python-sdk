@@ -1,10 +1,6 @@
 # ninetrix-sdk
 
-Python SDK for [Ninetrix](https://ninetrix.io) — define AI agent tools in code.
-
-## Phase 1: `@Tool` decorator
-
-Connect any Python function to a Ninetrix agent. The function is auto-discovered by `ninetrix build`, bundled into the Docker image, and dispatched at runtime alongside MCP tools.
+Python SDK for [Ninetrix](https://ninetrix.io) — build, compose, and deploy AI agents in pure Python.
 
 ```bash
 pip install ninetrix-sdk
@@ -12,169 +8,137 @@ pip install ninetrix-sdk
 
 ---
 
-## Quick start
+## What it does
 
-**1. Define your tools**
+The Ninetrix SDK lets you define agents, tools, workflows, and multi-agent teams entirely in Python. Agents are portable — serialize to YAML, run locally, or deploy to Ninetrix Cloud.
 
-```python
-# tools/db_tools.py
-from ninetrix import Tool
+---
 
-@Tool
-def query_customers(sql: str, limit: int = 100) -> list[dict]:
-    """Execute a read-only SQL query against the customer database.
+## Core Concepts
 
-    Args:
-        sql: A valid SELECT statement.
-        limit: Maximum rows to return.
-    """
-    return db.execute(sql, limit=limit)
+### Agents
 
+Define an agent with a role, tools, and an LLM provider. Run it synchronously, asynchronously, or as a streaming event source.
 
-@Tool
-def send_notification(channel: str, message: str) -> bool:
-    """Send a message to an internal Slack channel.
+Agents support structured output (Pydantic models), token/cost budgets, and human-in-the-loop approval gates.
 
-    Args:
-        channel: Destination channel (e.g. "#ops").
-        message: Notification text.
-    """
-    return slack.post(channel, message)
-```
+### Tools
 
-**2. Reference in `agentfile.yaml`**
+The `@Tool` decorator turns any Python function into an agent tool. The function signature is automatically converted to a JSON Schema — no manual wiring needed.
 
-```yaml
-agents:
-  my-agent:
-    metadata:
-      role: Operations assistant
-      goal: Answer questions and send alerts using internal tools
+Group related tools with `Toolkit` for cleaner organization.
 
-    runtime:
-      provider: anthropic
-      model: claude-sonnet-4-6
+### Tool Sources
 
-    tools:
-      - name: web_search
-        source: mcp://brave-search        # MCP tool — unchanged
+Agents can use tools from multiple sources, all mixed together:
 
-      - name: db_tools
-        source: ./tools/db_tools.py       # Python tool file — NEW
-```
+| Source | Description |
+|--------|-------------|
+| `@Tool` functions | Local Python functions |
+| MCP servers | Via MCP Gateway (JSON-RPC) |
+| OpenAPI specs | Any REST API with an OpenAPI 3.x spec |
+| Composio | Composio SDK integrations |
+| Community plugins | `pip install ninetrix-source-*` (auto-discovered) |
 
-**3. Build and run**
+The plugin system uses standard Python `entry_points` — anyone can publish a new tool source.
+
+### Workflows
+
+The `@Workflow` decorator defines sequential pipelines that chain agents together. Workflows support:
+
+- **Durable execution** — checkpoint every step, resume on crash
+- **Declarative steps** — `run_step(name, fn)` for clean step definitions
+- **Fan-out** — `map(agent, items, concurrency)` for parallel execution
+- **Early exit** — `terminate(reason)` for explicit abort
+
+### Teams
+
+`Team` provides LLM-based dynamic routing across multiple agents. The router agent picks the best specialist for each request — no manual if/else chains.
+
+### Ninetrix Context
+
+The `Ninetrix` factory class sets provider and model defaults once. All agents, teams, and workflows created from the context inherit the configuration.
+
+---
+
+## Providers
+
+Built-in LLM adapters with a unified interface:
+
+- Anthropic (Claude)
+- OpenAI (GPT)
+- Google (Gemini)
+- LiteLLM (100+ models)
+- Fallback chains (try providers in order)
+
+All provider exceptions are wrapped — raw third-party errors never surface.
+
+---
+
+## Observability
+
+- **EventBus** — pub-sub event system for all agent lifecycle events
+- **OpenTelemetry** — opt-in tracing (graceful no-op if OTEL SDK not installed)
+- **Debug mode** — pretty-print all events to stderr
+- **Dashboard telemetry** — `RunnerReporter` posts events for trace visualization
+- **Token tracking** — per-turn and per-run budget monitoring with cost estimates
+
+---
+
+## Persistence
+
+- **InMemoryCheckpointer** — for local dev and testing
+- **PostgresCheckpointer** — production-grade with `SELECT FOR UPDATE`
+- Durable workflows automatically resume from the last successful step on crash
+
+---
+
+## Testing
+
+Built-in testing utilities for deterministic agent tests without real LLM calls:
+
+- `MockTool` — fake tools with call tracking and assertions
+- `MockProvider` — scripted LLM responses
+- `AgentSandbox` — isolated test harness with full assertion API
+
+---
+
+## Deployment
+
+Agents can be served, built, and deployed from code:
+
+- `agent.serve()` — FastAPI HTTP server (`/invoke`, `/stream`, `/health`, `/info`)
+- `agent.build()` — serialize to YAML and build a Docker image via `ninetrix build`
+- `agent.deploy()` — push to Ninetrix Cloud
+
+---
+
+## YAML Serialization
+
+Every agent is serializable from day one:
+
+- `agent.to_yaml()` — export to `agentfile.yaml` format
+- `Agent.from_yaml()` — load from YAML back into a live agent
+
+This makes agents portable between code-first and YAML-first workflows.
+
+---
+
+## Optional Dependencies
+
+Install only what you need:
 
 ```bash
-ninetrix build    # discovers @Tool functions, bundles them into the image
-ninetrix run      # agent can now call query_customers and send_notification
+pip install 'ninetrix-sdk[anthropic]'     # Anthropic provider
+pip install 'ninetrix-sdk[openai]'        # OpenAI provider
+pip install 'ninetrix-sdk[google]'        # Google provider
+pip install 'ninetrix-sdk[providers]'     # All providers
+pip install 'ninetrix-sdk[serve]'         # FastAPI server
+pip install 'ninetrix-sdk[otel]'          # OpenTelemetry tracing
 ```
-
----
-
-## How it works
-
-| Step | What happens |
-|------|-------------|
-| `ninetrix build` | Scans `source: ./...py` entries, imports the file, extracts `@Tool` schemas |
-| Dockerfile | Copies the `.py` files into the image, installs `ninetrix-sdk` |
-| Container start | Imports the tool files, registers functions in the local registry |
-| LLM call | Agent receives local tool schemas alongside MCP tool schemas |
-| Tool dispatch | When the LLM calls a local tool, the Python function is invoked directly |
-
----
-
-## `@Tool` API
-
-### Bare decorator
-
-```python
-@Tool
-def my_function(param: str, count: int = 5) -> str:
-    """One-line description used as the tool description.
-
-    Args:
-        param: Injected into the tool's parameter schema.
-        count: Optional param — not required, default shown to LLM.
-    """
-    ...
-```
-
-### Decorator factory (with overrides)
-
-```python
-@Tool(name="custom_name", description="Override the docstring description.")
-def my_function(param: str) -> str:
-    ...
-```
-
-### Supported parameter types
-
-| Python type | JSON Schema |
-|------------|------------|
-| `str` | `{"type": "string"}` |
-| `int` | `{"type": "integer"}` |
-| `float` | `{"type": "number"}` |
-| `bool` | `{"type": "boolean"}` |
-| `list[str]` | `{"type": "array", "items": {"type": "string"}}` |
-| `dict` | `{"type": "object"}` |
-| `Optional[str]` | `{"type": "string"}` (not required) |
-| `Literal["a","b"]` | `{"type": "string", "enum": ["a","b"]}` |
-
-Parameters without defaults → `required`. Parameters with defaults → optional (default shown in schema).
-
----
-
-## Multiple tool files
-
-```yaml
-tools:
-  - name: db_tools
-    source: ./tools/db_tools.py
-
-  - name: api_tools
-    source: ./tools/api_tools.py
-
-  - name: web_search
-    source: mcp://brave-search
-```
-
----
-
-## Testing your tools
-
-Tools are plain Python functions — test them directly:
-
-```python
-# tests/test_db_tools.py
-from tools.db_tools import query_customers
-
-def test_query_customers():
-    result = query_customers("SELECT id FROM customers LIMIT 1")
-    assert isinstance(result, list)
-```
-
-To inspect the generated schema:
-
-```python
-from ninetrix import _registry
-from tools import db_tools  # triggers @Tool registrations
-
-td = _registry.get("query_customers")
-print(td.to_anthropic_schema())
-```
-
----
-
-## Roadmap
-
-- **Phase 1** ✅ — `@Tool` decorator, build discovery, runtime dispatch
-- **Phase 2** — `Agent(...)` class + `@Workflow` decorator for Python-first agent definition
-- **Phase 3** — Durable execution: checkpoint every workflow step, resume on crash
 
 ---
 
 ## License
 
 Apache 2.0
-

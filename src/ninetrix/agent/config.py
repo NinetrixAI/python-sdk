@@ -27,7 +27,7 @@ class MCPConfig:
 
     gateway_url: str = ""
     token: str = ""
-    workspace_id: str = ""
+    org_id: str = ""
 
 
 @dataclass

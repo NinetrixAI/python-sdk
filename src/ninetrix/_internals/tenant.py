@@ -3,7 +3,7 @@ ninetrix._internals.tenant
 ===========================
 L1 kernel — stdlib + _internals only.
 
-``TenantContext`` scopes every agent run to a workspace/org so that multiple
+``TenantContext`` scopes every agent run to an organization so that multiple
 tenants can share a single SDK process without credential or data leakage.
 
 Uses Python ``contextvars`` — asyncio-safe, propagates automatically through
@@ -13,7 +13,7 @@ Three-tier usage model
 ----------------------
 
 1. **Scripts / CLI** (zero setup):
-   ``_auto_init_from_env()`` runs at import and reads ``NINETRIX_WORKSPACE_ID``
+   ``_auto_init_from_env()`` runs at import and reads ``NINETRIX_ORG_ID``
    + ``NINETRIX_API_KEY`` from the environment.  Single-tenant users never
    call ``set_tenant()`` — it just works.
 
@@ -24,7 +24,7 @@ Three-tier usage model
        @app.post("/v1/run")
        async def run_handler(req, user=Depends(auth)):
            async with tenant_scope(TenantContext(
-               workspace_id=user.workspace_id,
+               org_id=user.org_id,
                api_key=user.nxt_api_key,
            )):
                result = await agent.arun(req.message)
@@ -64,15 +64,13 @@ class TenantContext:
     ``await`` chains in the same asyncio task.
 
     Attributes:
-        workspace_id: Ninetrix workspace identifier (required).
-        org_id:       Optional organisation grouping (multi-org setups).
-        api_key:      ``nxt_...`` workspace token for Ninetrix Cloud API calls.
+        org_id:       Ninetrix organization identifier (required).
+        api_key:      ``nxt_...`` organization token for Ninetrix Cloud API calls.
         region:       Cloud region hint (``"us"`` / ``"eu"``).
         db_schema:    PostgreSQL schema for this tenant's data (multi-tenant DB).
     """
 
-    workspace_id: str
-    org_id: str = ""
+    org_id: str
     api_key: str = field(default="", repr=False)  # never printed; prevents log leakage
     region: str = "us"
     db_schema: str = "public"
@@ -125,8 +123,8 @@ def require_tenant() -> TenantContext:
             "  Why: The calling code requires a tenant scope but none was established.\n"
             "  Fix:\n"
             "    → In a FastAPI handler: async with tenant_scope(TenantContext(...)):\n"
-            "    → In a script: call set_tenant(TenantContext(workspace_id=..., api_key=...)) first\n"
-            "    → In tests: use AgentSandbox(agent, tenant=TenantContext(workspace_id='test-ws'))"
+            "    → In a script: call set_tenant(TenantContext(org_id=..., api_key=...)) first\n"
+            "    → In tests: use AgentSandbox(agent, tenant=TenantContext(org_id='test-org'))"
         )
     return tenant
 
@@ -141,7 +139,7 @@ async def tenant_scope(
 
     .. code-block:: python
 
-        async with tenant_scope(TenantContext(workspace_id="ws-123", api_key="nxt_...")):
+        async with tenant_scope(TenantContext(org_id="org-123", api_key="nxt_...")):
             result = await agent.arun("analyse this quarter's results")
     """
     token = _current_tenant.set(ctx)
@@ -157,12 +155,12 @@ async def tenant_scope(
 
 def _auto_init_from_env() -> None:
     """
-    If ``NINETRIX_WORKSPACE_ID`` is set in the environment, create a default
+    If ``NINETRIX_ORG_ID`` is set in the environment, create a default
     ``TenantContext`` and set it as the process-wide tenant.
 
     This makes single-tenant scripts work with zero setup::
 
-        export NINETRIX_WORKSPACE_ID=ws-abc123
+        export NINETRIX_ORG_ID=org-abc123
         export NINETRIX_API_KEY=nxt_...
 
     Both env vars must be present; if only one is set, no context is created
@@ -170,12 +168,12 @@ def _auto_init_from_env() -> None:
     """
     import os
 
-    workspace_id = os.environ.get("NINETRIX_WORKSPACE_ID", "")
+    org_id = os.environ.get("NINETRIX_ORG_ID", "")
     api_key = os.environ.get("NINETRIX_API_KEY", "")
 
-    if workspace_id and api_key:
+    if org_id and api_key:
         _current_tenant.set(
-            TenantContext(workspace_id=workspace_id, api_key=api_key)
+            TenantContext(org_id=org_id, api_key=api_key)
         )
 
 

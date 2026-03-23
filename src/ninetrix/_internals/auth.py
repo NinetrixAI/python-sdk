@@ -3,7 +3,7 @@ ninetrix._internals.auth
 ========================
 L1 kernel — stdlib only, no ninetrix imports (except sibling L1 modules).
 
-CredentialStore resolves LLM API keys and workspace tokens for a given provider.
+CredentialStore resolves LLM API keys and organization tokens for a given provider.
 
 Resolution order (highest to lowest priority):
   1. Explicit kwarg passed to resolve()        — Agent(api_key="sk-...")
@@ -64,7 +64,7 @@ def _env_var_name(provider: str) -> str:
 
 class CredentialStore:
     """
-    Resolves API keys for LLM providers and workspace tokens.
+    Resolves API keys for LLM providers and organization tokens.
 
     Usage:
         store = CredentialStore(config)
@@ -147,9 +147,9 @@ class CredentialStore:
             f"       run: ninetrix auth login"
         )
 
-    def resolve_workspace_token(self, *, explicit_token: str | None = None) -> str | None:
+    def resolve_org_token(self, *, explicit_token: str | None = None) -> str | None:
         """
-        Resolve the Ninetrix workspace API token (nxt_...).
+        Resolve the Ninetrix organization API token (nxt_...).
 
         Resolution order:
           1. explicit_token kwarg

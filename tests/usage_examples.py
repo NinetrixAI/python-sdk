@@ -233,11 +233,11 @@ assert ts is tenant_scope
 import asyncio as _asyncio
 
 async def _test_tenant():
-    tc = TenantContext(workspace_id="ws-example", api_key="nxt_test")
+    tc = TenantContext(org_id="ws-example", api_key="nxt_test")
     async with tenant_scope(tc) as active:
         assert active is tc
         assert get_tenant() is tc
-        assert require_tenant().workspace_id == "ws-example"
+        assert require_tenant().org_id == "ws-example"
     assert get_tenant() is None
 
 _asyncio.run(_test_tenant())
@@ -421,16 +421,16 @@ print("✓ PR 20: Events + Hooks")
 # # Tier 2: middleware pattern (SaaS — set once per request, not per agent call)
 # async def tenant_test():
 #     assert get_tenant() is None   # before scope: not set
-#     async with tenant_scope(TenantContext(workspace_id="ws-123", api_key="nxt_test")):
+#     async with tenant_scope(TenantContext(org_id="ws-123", api_key="nxt_test")):
 #         t = get_tenant()
-#         assert t is not None and t.workspace_id == "ws-123"
+#         assert t is not None and t.org_id == "ws-123"
 #     assert get_tenant() is None   # after scope: restored
 #
 #     # Nested scopes work — inner overrides, outer restores
-#     async with tenant_scope(TenantContext(workspace_id="outer")):
-#         async with tenant_scope(TenantContext(workspace_id="inner")):
-#             assert get_tenant().workspace_id == "inner"
-#         assert get_tenant().workspace_id == "outer"
+#     async with tenant_scope(TenantContext(org_id="outer")):
+#         async with tenant_scope(TenantContext(org_id="inner")):
+#             assert get_tenant().org_id == "inner"
+#         assert get_tenant().org_id == "outer"
 #
 # # asyncio.run(tenant_test())
 # # Tier 3: AgentSandbox(tenant=TenantContext(...)) — sandbox handles scope internally
@@ -446,7 +446,7 @@ from ninetrix._internals.types import AgentProtocol
 
 _local  = Agent(name="analyst", provider="anthropic")
 _docker = AgentClient("http://analyst:9000", name="analyst")
-_cloud  = RemoteAgent("my-workspace/analyst", api_key="nxt_test")
+_cloud  = RemoteAgent("my-org/analyst", api_key="nxt_test")
 
 assert isinstance(_local,  AgentProtocol), "Agent must satisfy AgentProtocol"
 assert isinstance(_docker, AgentProtocol), "AgentClient must satisfy AgentProtocol"
@@ -481,7 +481,7 @@ print("✓ PR 21: Streaming")
 from ninetrix import MCPToolSource, ComposioToolSource
 from ninetrix.runtime.dispatcher import ToolDispatcher, _extract_mcp_result
 
-_mcp = MCPToolSource("http://mcp-gateway:8080", token="dev-secret", workspace_id="ws1")
+_mcp = MCPToolSource("http://mcp-gateway:8080", token="dev-secret", org_id="ws1")
 _composio = ComposioToolSource(apps=["GITHUB"], api_key="comp_test")
 assert _mcp.tool_definitions() == []      # not initialized yet
 assert _composio.tool_definitions() == []

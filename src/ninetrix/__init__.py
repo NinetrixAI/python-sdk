@@ -289,8 +289,11 @@ from ninetrix.runtime.dispatcher import (
     RegistryToolSource as RegistryToolSource,
     MCPToolSource as MCPToolSource,
     ComposioToolSource as ComposioToolSource,
+    OpenAPIToolSource as OpenAPIToolSource,
 )
 from ninetrix.tools.context import ToolContext as ToolContext
+from ninetrix.tools.agent_context import AgentContext as AgentContext
+from ninetrix.tools.auth_resolver import AuthResolver as AuthResolver
 from ninetrix._internals.types import (
     # Result / event types
     AgentResult as AgentResult,
@@ -377,6 +380,10 @@ __all__ = [
     "LocalToolSource",
     "RegistryToolSource",
     "ToolContext",
+    # Modular provider system
+    "AgentContext",
+    "AuthResolver",
+    "OpenAPIToolSource",
     # PR 14 — MessageHistory + BudgetTracker
     "MessageHistory",
     "BudgetTracker",

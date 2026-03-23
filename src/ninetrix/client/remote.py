@@ -18,7 +18,7 @@ Example::
 
     from ninetrix import RemoteAgent
 
-    analyst = RemoteAgent("my-workspace/analyst", api_key="nxt_...")
+    analyst = RemoteAgent("my-org/analyst", api_key="nxt_...")
     result  = analyst.run("Compare AAPL and MSFT")
     print(result.output)
 """
@@ -70,8 +70,8 @@ class RemoteAgent:
     :class:`~ninetrix._internals.types.CredentialError`.
 
     Args:
-        slug:    Agent identifier, either ``"workspace/agent-name"`` or just
-                 ``"agent-name"`` (uses the workspace from TenantContext).
+        slug:    Agent identifier, either ``"org/agent-name"`` or just
+                 ``"agent-name"`` (uses the organization from TenantContext).
         api_key: Ninetrix Cloud API key (``nxt_...``).  When not provided, the
                  key is resolved from :class:`~ninetrix.TenantContext` or the
                  ``NINETRIX_API_KEY`` environment variable.

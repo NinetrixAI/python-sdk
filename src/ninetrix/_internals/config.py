@@ -78,9 +78,9 @@ class NinetrixConfig:
     default_model:      Model used when Agent(model=) is not set.
     default_temperature: Sampling temperature (0.0–2.0).
     api_url:            Ninetrix Cloud / local API base URL for telemetry + runner events.
-    runner_token:       Bearer token sent with runner events (machine secret or workspace token).
+    runner_token:       Bearer token sent with runner events (machine secret or organization token).
     mcp_gateway_url:    MCP gateway base URL (e.g. http://localhost:8080).
-    workspace_id:       Workspace identifier (used by TenantContext auto-init).
+    org_id:             Organization identifier (used by TenantContext auto-init).
     api_key:            Ninetrix API key (nxt_...) for cloud features and RemoteAgent.
     telemetry_enabled:  Whether anonymous SDK usage telemetry is sent.
     debug:              Enable verbose debug logging.
@@ -94,7 +94,7 @@ class NinetrixConfig:
     api_url: str = ""
     runner_token: str = field(default="", repr=False)  # never printed; prevents log leakage
     mcp_gateway_url: str = ""
-    workspace_id: str = ""
+    org_id: str = ""
     api_key: str = field(default="", repr=False)  # never printed; prevents log leakage
 
     telemetry_enabled: bool = True
@@ -111,7 +111,7 @@ class NinetrixConfig:
         api_url: str | None = None,
         runner_token: str | None = None,
         mcp_gateway_url: str | None = None,
-        workspace_id: str | None = None,
+        org_id: str | None = None,
         api_key: str | None = None,
         telemetry_enabled: bool | None = None,
         debug: bool | None = None,
@@ -210,8 +210,8 @@ class NinetrixConfig:
             mcp_gateway_url=resolve_str(
                 mcp_gateway_url, "NINETRIX_MCP_GATEWAY_URL", "mcp_gateway_url", ""
             ),
-            workspace_id=resolve_str(
-                workspace_id, "NINETRIX_WORKSPACE_ID", "workspace_id", ""
+            org_id=resolve_str(
+                org_id, "NINETRIX_ORG_ID", "org_id", ""
             ),
             api_key=resolve_str(
                 api_key, "NINETRIX_API_KEY", "api_key", ""

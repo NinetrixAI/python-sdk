@@ -491,10 +491,13 @@ class Agent(HooksMixin, Generic[T_Output]):
         """
         from ninetrix._internals.auth import CredentialStore
         from ninetrix._internals.config import NinetrixConfig
+        from ninetrix._internals.http import get_http_client
         from ninetrix._internals.types import CredentialError
         from ninetrix.checkpoint.memory import InMemoryCheckpointer
         from ninetrix.runtime.dispatcher import LocalToolSource, ToolDispatcher
         from ninetrix.runtime.runner import AgentRunner, RunnerConfig
+        from ninetrix.tools.agent_context import AgentContext
+        from ninetrix.tools.auth_resolver import AuthResolver
 
         cfg = self.config
         nxt_config = NinetrixConfig.load()
@@ -512,6 +515,14 @@ class Agent(HooksMixin, Generic[T_Output]):
 
         # 2. Build provider adapter
         provider = self._build_provider(cfg.provider, api_key, cfg.model)
+
+        # 2b. Build shared AgentContext for all tool sources
+        agent_ctx = AgentContext(
+            http=get_http_client(),
+            auth=AuthResolver(),
+            agent_name=cfg.name,
+            org_id=nxt_config.org_id or "default",
+        )
 
         # 3. Build tool sources
         sources = []
@@ -542,11 +553,12 @@ class Agent(HooksMixin, Generic[T_Output]):
         if cfg.mcp_tools and cfg.mcp.gateway_url:
             from ninetrix.runtime.dispatcher import MCPToolSource
             mcp_token = cfg.mcp.token or nxt_config.mcp_gateway_token or ""
-            workspace = cfg.mcp.workspace_id or nxt_config.workspace_id or "default"
+            org_id = cfg.mcp.org_id or nxt_config.org_id or "default"
             sources.append(MCPToolSource(
                 gateway_url=cfg.mcp.gateway_url,
                 token=mcp_token,
-                workspace_id=workspace,
+                org_id=org_id,
+                ctx=agent_ctx,
             ))
 
         # Composio tools — wire ComposioToolSource when apps are listed
@@ -634,7 +646,7 @@ class Agent(HooksMixin, Generic[T_Output]):
                 pass  # asyncpg not installed — fall through to InMemory
 
         api_url = cfg.api_url or getattr(nxt_config, "api_url", "")
-        runner_token = cfg.runner_token or creds.resolve_workspace_token()
+        runner_token = cfg.runner_token or creds.resolve_org_token()
         if api_url and runner_token:
             try:
                 from ninetrix.checkpoint.api import ApiCheckpointer  # type: ignore[import]
@@ -821,7 +833,7 @@ class Agent(HooksMixin, Generic[T_Output]):
 
     async def deploy(
         self,
-        workspace_id: Optional[str] = None,
+        org_id: Optional[str] = None,
         api_key: Optional[str] = None,
         region: str = "iad",
     ) -> dict[str, Any]:
@@ -831,9 +843,9 @@ class Agent(HooksMixin, Generic[T_Output]):
         ``POST /v1/deployments`` on the Ninetrix Cloud API.
 
         Args:
-            workspace_id: Cloud workspace ID.  If omitted, resolved from
+            org_id:       Cloud organization ID.  If omitted, resolved from
                           :class:`~ninetrix._internals.tenant.TenantContext` or
-                          ``NINETRIX_WORKSPACE_ID`` env var.
+                          ``NINETRIX_ORG_ID`` env var.
             api_key:      Ninetrix API key.  If omitted, resolved from
                           :class:`~ninetrix._internals.tenant.TenantContext` or
                           ``NINETRIX_API_KEY`` env var.
@@ -843,24 +855,24 @@ class Agent(HooksMixin, Generic[T_Output]):
             ``{"deployment_id": str, "url": str, "status": "deploying"}``
 
         Raises:
-            CredentialError: If workspace_id or api_key cannot be resolved.
+            CredentialError: If org_id or api_key cannot be resolved.
 
         Example::
 
-            result = await agent.deploy(workspace_id="ws_abc123", api_key="nxt_...")
+            result = await agent.deploy(org_id="org_abc123", api_key="nxt_...")
             print(result["url"])   # "https://my-agent.ninetrix.app"
         """
         import os
         from ninetrix._internals.types import CredentialError
         from ninetrix._internals.http import get_http_client
 
-        # Resolve workspace_id
-        if not workspace_id:
+        # Resolve org_id
+        if not org_id:
             from ninetrix._internals.tenant import get_tenant
             tenant = get_tenant()
             if tenant:
-                workspace_id = tenant.workspace_id
-            workspace_id = workspace_id or os.environ.get("NINETRIX_WORKSPACE_ID", "")
+                org_id = tenant.org_id
+            org_id = org_id or os.environ.get("NINETRIX_ORG_ID", "")
 
         # Resolve api_key
         if not api_key:
@@ -870,13 +882,13 @@ class Agent(HooksMixin, Generic[T_Output]):
                 api_key = tenant.api_key
             api_key = api_key or os.environ.get("NINETRIX_API_KEY", "")
 
-        if not workspace_id or not api_key:
+        if not org_id or not api_key:
             raise CredentialError(
-                "agent.deploy() requires workspace_id and api_key.\n"
-                "  Why: could not find workspace_id or api_key in arguments, "
+                "agent.deploy() requires org_id and api_key.\n"
+                "  Why: could not find org_id or api_key in arguments, "
                 "TenantContext, or environment variables.\n"
-                "  Fix: pass workspace_id= and api_key= explicitly, or set "
-                "NINETRIX_WORKSPACE_ID and NINETRIX_API_KEY environment variables."
+                "  Fix: pass org_id= and api_key= explicitly, or set "
+                "NINETRIX_ORG_ID and NINETRIX_API_KEY environment variables."
             )
 
         yaml_str = self.to_yaml()
@@ -892,7 +904,7 @@ class Agent(HooksMixin, Generic[T_Output]):
             },
             headers={
                 "Authorization": f"Bearer {api_key}",
-                "X-Workspace-ID": workspace_id,
+                "X-Org-ID": org_id,
             },
             timeout=60.0,
         )
@@ -901,7 +913,7 @@ class Agent(HooksMixin, Generic[T_Output]):
             raise CredentialError(
                 f"agent.deploy() failed with HTTP {resp.status_code}.\n"
                 f"  Response: {resp.text[:200]}\n"
-                "  Fix: check your workspace_id and api_key."
+                "  Fix: check your org_id and api_key."
             )
 
         data = resp.json()

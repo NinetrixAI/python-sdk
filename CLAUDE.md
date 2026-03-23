@@ -44,6 +44,19 @@ Read this at the start of every session before touching any code.
 - `repr=False` on `TenantContext.api_key`, `NinetrixConfig.api_key`, `NinetrixConfig.runner_token`
 - `async with get_http_client()` replaced with direct calls in all 3 sites (was silently destroying the singleton)
 
+**Modular Tool Provider System (post-v0.1.0, 2026-03-22):**
+- `ToolSource` ABC evolved: added `source_type`, `validate_config()`, `health_check()`, `shutdown()` lifecycle methods
+- `ToolSource` moved to `tools/base.py` (L2). `runtime/dispatcher.py` re-exports for backwards compat.
+- All 4 sources extracted to `tools/sources/*.py`: `local.py`, `registry.py`, `mcp.py`, `composio.py`
+- NEW: `OpenAPIToolSource` in `tools/sources/openapi.py` — any REST API with an OpenAPI spec becomes tools
+- NEW: `AgentContext` in `tools/agent_context.py` — shared services (http, auth, logger) for all sources
+- NEW: `AuthResolver` in `tools/auth_resolver.py` — converts auth config dicts → HTTP headers
+- NEW: `tools/discovery.py` — plugin discovery via `entry_points(group="ninetrix.tool_sources")`
+- `ToolDispatcher` updated: `initialize()` calls `validate_config()` first, added `shutdown()` + `health_check()`
+- `Agent._build_runner()` constructs `AgentContext` and passes it to MCP/Registry sources
+- MCPToolSource + RegistryToolSource accept optional `ctx: AgentContext` (prefer `ctx.http` over singleton)
+- 59 new tests: test_agent_context.py (29), test_openapi_source.py (20), test_discovery.py (10)
+
 ---
 
 ## Package layout
@@ -58,9 +71,21 @@ sdk/
 │   ├── schema.py          ← Phase 1 (done)
 │   ├── discover.py        ← Phase 1 (done)
 │   ├── _internals/        ← private kernel (L1)
-│   ├── tools/             ← @Tool ecosystem (L2)
-│   ├── runtime/           ← agentic loop (L3)
-│   ├── providers/         ← LLM adapters (L4)
+│   ├── tools/             ← @Tool ecosystem + ToolSource plugin system (L2)
+│   │   ├── base.py        ← ToolSource ABC (plugin interface)
+│   │   ├── agent_context.py ← AgentContext shared services
+│   │   ├── auth_resolver.py ← AuthResolver (auth config → HTTP headers)
+│   │   ├── discovery.py   ← entry_points plugin discovery
+│   │   ├── context.py     ← ToolContext (per-call injection)
+│   │   ├── toolkit.py     ← Toolkit grouping
+│   │   └── sources/       ← built-in ToolSource implementations
+│   │       ├── local.py   ← LocalToolSource (@Tool functions)
+│   │       ├── mcp.py     ← MCPToolSource (MCP Gateway JSON-RPC)
+│   │       ├── composio.py ← ComposioToolSource (Composio SDK)
+│   │       ├── registry.py ← RegistryToolSource (Skill Registry)
+│   │       └── openapi.py ← OpenAPIToolSource (any REST API → tools)
+│   ├── runtime/           ← agentic loop (L3) — dispatcher.py re-exports sources
+│   ├── providers/         ← LLM adapters (L4) — NOT tool providers
 │   ├── middleware/        ← request pipeline (L5)
 │   ├── observability/     ← events, hooks, otel, streaming (L6)
 │   ├── checkpoint/        ← persistence (L7)
@@ -112,6 +137,9 @@ Check for circular imports after every PR with: `python -c "import ninetrix"`
 - **Error messages: what + why + how to fix** — every `raise` must include all three.
 - **`py.typed` marker** — must exist at `src/ninetrix/py.typed` (empty file, PEP 561).
 - **`RegistryToolSource` lazy init** — schemas fetched at `dispatcher.initialize()`, not at construction. Always call `await dispatcher.initialize()` before first run.
+- **`ToolSource` lives in `tools/base.py` (L2)** — `runtime/dispatcher.py` re-exports it for backwards compat. All source implementations live in `tools/sources/*.py`. Community plugins discovered via `entry_points(group="ninetrix.tool_sources")`.
+- **Two kinds of "providers"** — `providers/` = LLM adapters (Anthropic, OpenAI, Google). `tools/sources/` = tool sources (MCP, OpenAPI, Composio). Don't confuse them.
+- **`AgentContext`** — shared services injected into all ToolSource instances. Constructed in `Agent._build_runner()`. NOT the same as `ToolContext` (per-call injection for `@Tool` functions).
 - **YAML is core** — `Agent.from_yaml()` / `agent.to_yaml()` live at PR 19 (not last). Every agent must be serializable from day one of the public API.
 
 ---
@@ -126,7 +154,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 
 ---
 
-## PR sequence (32 total)
+## PR sequence (32 + modular provider system)
 
 | PR | Files | Notes | Status |
 |----|-------|-------|--------|
@@ -162,6 +190,7 @@ The `as Name` pattern makes symbols explicitly public (mypy, pyright, pylance al
 | 30 | `testing/` | MockTool, AgentSandbox, MockProvider, SandboxedDispatcher, SandboxResult | ✅ |
 | 31 | `observability/otel.py` | configure_otel, attach_otel_to_bus, graceful no-op without sdk | ✅ |
 | 32 | `agent/server.py` + `Agent.serve/build/deploy` | FastAPI server, CLI subprocess build, Cloud deploy | ✅ |
+| **MP** | **Modular provider system** (post-v0.1.0) | `tools/base.py`, `tools/sources/*`, `tools/agent_context.py`, `tools/auth_resolver.py`, `tools/discovery.py`, `tools/sources/openapi.py` | ✅ |
 
 ---
 

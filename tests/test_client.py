@@ -189,7 +189,7 @@ async def test_agent_client_sends_tenant_auth_header():
     mock_http = MagicMock()
     mock_http.post = AsyncMock(return_value=mock_resp)
 
-    async with tenant_scope(TenantContext(workspace_id="ws1", api_key="nxt_test")):
+    async with tenant_scope(TenantContext(org_id="ws1", api_key="nxt_test")):
         with patch("ninetrix.client.local.get_http_client", return_value=mock_http):
             await c.arun("hello")
 
@@ -252,7 +252,7 @@ def test_agent_client_run_and_arun_callable():
 
 
 def test_remote_agent_name_from_slug():
-    r = RemoteAgent("my-workspace/analyst")
+    r = RemoteAgent("my-org/analyst")
     assert r.name == "analyst"
 
 
@@ -336,7 +336,7 @@ def test_remote_agent_uses_tenant_api_key():
     r = RemoteAgent("ws/analyst")
 
     with patch("ninetrix.client.remote.get_tenant") as mock_get:
-        mock_get.return_value = TenantContext(workspace_id="ws", api_key="nxt_tenant")
+        mock_get.return_value = TenantContext(org_id="ws", api_key="nxt_tenant")
         key = r._resolve_api_key()
 
     assert key == "nxt_tenant"

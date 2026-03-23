@@ -335,7 +335,7 @@ async def test_build_runner_caches_result():
          patch("ninetrix.agent.agent.Agent._build_provider", return_value=mock_provider):
         instance = MockStore.return_value
         instance.resolve.return_value = "sk-ant-test"
-        instance.resolve_workspace_token.return_value = None
+        instance.resolve_org_token.return_value = None
 
         r1 = await a._get_runner()
         r2 = await a._get_runner()
@@ -354,7 +354,7 @@ async def test_invalidate_runner_clears_cache():
          patch("ninetrix.agent.agent.Agent._build_provider", return_value=mock_provider):
         instance = MockStore.return_value
         instance.resolve.return_value = "sk-ant-test"
-        instance.resolve_workspace_token.return_value = None
+        instance.resolve_org_token.return_value = None
 
         r1 = await a._get_runner()
         a.invalidate_runner()

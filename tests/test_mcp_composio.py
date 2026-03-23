@@ -99,7 +99,7 @@ async def test_mcp_initialize_fetches_schemas():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         await s.initialize()
 
     assert s.handles("slack__send_message")
@@ -123,7 +123,7 @@ async def test_mcp_initialize_converts_to_openai_format():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         await s.initialize()
 
     defs = s.tool_definitions()
@@ -142,7 +142,7 @@ async def test_mcp_initialize_posts_tools_list():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         await s.initialize()
 
     call_args = mock_client.post.call_args
@@ -162,7 +162,7 @@ async def test_mcp_initialize_sends_auth_header():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         await s.initialize()
 
     headers = mock_client.post.call_args[1]["headers"]
@@ -183,7 +183,7 @@ async def test_mcp_initialize_http_error_raises_tool_error():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         with pytest.raises(ToolError) as exc:
             await s.initialize()
     assert "403" in str(exc.value)
@@ -201,7 +201,7 @@ async def test_mcp_initialize_jsonrpc_error_raises_tool_error():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         with pytest.raises(ToolError) as exc:
             await s.initialize()
     assert "internal error" in str(exc.value)
@@ -227,7 +227,7 @@ async def test_mcp_call_returns_text_content():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         result = await s.call("slack__send_message", {"text": "hello"})
 
     assert result == "Message sent!"
@@ -247,7 +247,7 @@ async def test_mcp_call_posts_tools_call():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         await s.call("my_tool", {"x": 1})
 
     payload = mock_client.post.call_args[1]["json"]
@@ -272,7 +272,7 @@ async def test_mcp_call_http_error_raises_tool_error():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         with pytest.raises(ToolError):
             await s.call("my_tool", {})
 
@@ -291,7 +291,7 @@ async def test_mcp_call_jsonrpc_error_raises_tool_error():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         with pytest.raises(ToolError) as exc:
             await s.call("my_tool", {})
     assert "Tool not found" in str(exc.value)
@@ -315,7 +315,7 @@ async def test_mcp_call_auth_required_error_includes_hint():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         with pytest.raises(ToolError) as exc:
             await s.call("slack__send_message", {})
     assert "app.ninetrix.io" in str(exc.value) or "Connect" in str(exc.value)
@@ -348,7 +348,7 @@ async def test_dispatcher_with_mcp_source():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("ninetrix.runtime.dispatcher.get_http_client", return_value=mock_client):
+    with patch("ninetrix.tools.sources.mcp.get_http_client", return_value=mock_client):
         result = await dispatcher.call("search", {"q": "test"})
     assert result == "results"
 

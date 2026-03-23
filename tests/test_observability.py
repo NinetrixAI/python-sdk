@@ -294,13 +294,13 @@ async def test_otel_auto_attach_when_configured():
             ):
                 # Set up the mock chain so _build_runner() doesn't crash
                 mock_cfg.return_value = MagicMock(
-                    workspace_id="",
+                    org_id="",
                     mcp_gateway_token="",
                     mcp_gateway_url="",
                 )
                 mock_creds_instance = MagicMock()
                 mock_creds_instance.resolve.return_value = "fake-key"
-                mock_creds_instance.resolve_workspace_token.return_value = ""
+                mock_creds_instance.resolve_org_token.return_value = ""
                 mock_creds_cls.return_value = mock_creds_instance
                 mock_bp.return_value = MagicMock()
                 mock_bc.return_value = MagicMock()
@@ -345,13 +345,13 @@ async def test_otel_not_attached_when_not_configured():
                 patch("ninetrix.agent.agent.Agent._build_checkpointer") as mock_bc,
             ):
                 mock_cfg.return_value = MagicMock(
-                    workspace_id="",
+                    org_id="",
                     mcp_gateway_token="",
                     mcp_gateway_url="",
                 )
                 mock_creds_instance = MagicMock()
                 mock_creds_instance.resolve.return_value = "fake-key"
-                mock_creds_instance.resolve_workspace_token.return_value = ""
+                mock_creds_instance.resolve_org_token.return_value = ""
                 mock_creds_cls.return_value = mock_creds_instance
                 mock_bp.return_value = MagicMock()
                 mock_bc.return_value = MagicMock()

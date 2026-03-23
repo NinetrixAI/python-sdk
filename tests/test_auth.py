@@ -4,7 +4,7 @@ Unit tests for ninetrix._internals.auth (PR 4).
 Coverage:
 - CredentialStore.resolve(): all 4 layers + explicit_key
 - CredentialStore.require(): success and CredentialError with what/why/fix message
-- CredentialStore.resolve_workspace_token(): all resolution layers
+- CredentialStore.resolve_org_token(): all resolution layers
 - _from_env(): provider env var mapping, multiple vars per provider
 - _from_credentials_toml(): valid / missing / malformed TOML
 - _from_auth_json(): valid / missing / malformed JSON
@@ -338,30 +338,30 @@ class TestRequire:
 
 
 # ---------------------------------------------------------------------------
-# resolve_workspace_token()
+# resolve_org_token()
 # ---------------------------------------------------------------------------
 
-class TestResolveWorkspaceToken:
+class TestResolveOrgToken:
     def test_explicit_token_wins(self, monkeypatch):
         monkeypatch.setenv("NINETRIX_API_KEY", "nxt_from_env")
         store = _store()
-        assert store.resolve_workspace_token(explicit_token="nxt_explicit") == "nxt_explicit"
+        assert store.resolve_org_token(explicit_token="nxt_explicit") == "nxt_explicit"
 
     def test_config_api_key_used(self, monkeypatch):
         monkeypatch.delenv("NINETRIX_API_KEY", raising=False)
         store = _store(api_key="nxt_from_config")
-        assert store.resolve_workspace_token() == "nxt_from_config"
+        assert store.resolve_org_token() == "nxt_from_config"
 
     def test_env_var_used_when_config_empty(self, monkeypatch):
         monkeypatch.setenv("NINETRIX_API_KEY", "nxt_from_env")
         store = _store(api_key="")
-        assert store.resolve_workspace_token() == "nxt_from_env"
+        assert store.resolve_org_token() == "nxt_from_env"
 
     def test_credentials_toml_used(self, monkeypatch, tmp_path):
         monkeypatch.delenv("NINETRIX_API_KEY", raising=False)
         store = _store(api_key="")
         store._credentials_toml = {"ninetrix": {"api_key": "nxt_from_toml"}}
-        assert store.resolve_workspace_token() == "nxt_from_toml"
+        assert store.resolve_org_token() == "nxt_from_toml"
 
     def test_machine_secret_used_as_last_resort(self, tmp_path, monkeypatch):
         monkeypatch.delenv("NINETRIX_API_KEY", raising=False)
@@ -371,7 +371,7 @@ class TestResolveWorkspaceToken:
         store = _store(api_key="")
         store._credentials_toml = {}
         with patch.object(Path, "home", return_value=tmp_path):
-            result = store.resolve_workspace_token()
+            result = store.resolve_org_token()
         assert result == "nxt_machine"
 
     def test_returns_none_when_nothing_found(self, monkeypatch, tmp_path):
@@ -380,4 +380,4 @@ class TestResolveWorkspaceToken:
         store._credentials_toml = {}
         store._auth_json = {}
         with patch.object(Path, "home", return_value=tmp_path):
-            assert store.resolve_workspace_token() is None
+            assert store.resolve_org_token() is None

@@ -293,17 +293,17 @@ def test_build_writes_yaml_to_temp_file():
 
 
 @pytest.mark.asyncio
-async def test_deploy_raises_credential_error_without_workspace():
-    """deploy() raises CredentialError if no workspace_id found."""
+async def test_deploy_raises_credential_error_without_org():
+    """deploy() raises CredentialError if no org_id found."""
     agent = _make_agent()
 
     with patch.dict(os.environ, {}, clear=True):
         # Remove relevant env vars
         env = {k: v for k, v in os.environ.items()
-               if k not in ("NINETRIX_WORKSPACE_ID", "NINETRIX_API_KEY")}
+               if k not in ("NINETRIX_ORG_ID", "NINETRIX_API_KEY")}
         with patch.dict(os.environ, env, clear=True):
             with patch("ninetrix._internals.tenant.get_tenant", return_value=None):
-                with pytest.raises(CredentialError, match="workspace_id"):
+                with pytest.raises(CredentialError, match="org_id"):
                     await agent.deploy()
 
 
@@ -313,11 +313,11 @@ async def test_deploy_raises_credential_error_without_api_key():
     agent = _make_agent()
 
     with patch("ninetrix._internals.tenant.get_tenant", return_value=None):
-        with patch.dict(os.environ, {"NINETRIX_WORKSPACE_ID": "ws_test"}, clear=False):
+        with patch.dict(os.environ, {"NINETRIX_ORG_ID": "ws_test"}, clear=False):
             # Remove API key
             env = {k: v for k, v in os.environ.items() if k != "NINETRIX_API_KEY"}
             with patch.dict(os.environ, env, clear=True):
-                env["NINETRIX_WORKSPACE_ID"] = "ws_test"
+                env["NINETRIX_ORG_ID"] = "ws_test"
                 with patch.dict(os.environ, env, clear=True):
                     with pytest.raises(CredentialError):
                         await agent.deploy()
@@ -344,7 +344,7 @@ async def test_deploy_makes_api_call():
     with patch("ninetrix._internals.http.get_http_client", return_value=mock_client), \
          patch("ninetrix._internals.tenant.get_tenant", return_value=None):
         result = await agent.deploy(
-            workspace_id="ws_test",
+            org_id="ws_test",
             api_key="nxt_test_key",
         )
 
@@ -370,16 +370,16 @@ async def test_deploy_raises_on_http_error():
     with patch("ninetrix._internals.http.get_http_client", return_value=mock_client), \
          patch("ninetrix._internals.tenant.get_tenant", return_value=None):
         with pytest.raises(CredentialError, match="HTTP 401"):
-            await agent.deploy(workspace_id="ws_test", api_key="bad_key")
+            await agent.deploy(org_id="ws_test", api_key="bad_key")
 
 
 @pytest.mark.asyncio
 async def test_deploy_uses_tenant_context():
-    """deploy() resolves workspace_id/api_key from TenantContext."""
+    """deploy() resolves org_id/api_key from TenantContext."""
     agent = _make_agent()
 
     mock_tenant = MagicMock()
-    mock_tenant.workspace_id = "ws_from_context"
+    mock_tenant.org_id = "ws_from_context"
     mock_tenant.api_key = "key_from_context"
 
     mock_response = MagicMock()
@@ -397,14 +397,14 @@ async def test_deploy_uses_tenant_context():
 
     with patch("ninetrix._internals.http.get_http_client", return_value=mock_client), \
          patch("ninetrix._internals.tenant.get_tenant", return_value=mock_tenant):
-        result = await agent.deploy()  # no explicit workspace_id/api_key
+        result = await agent.deploy()  # no explicit org_id/api_key
 
     assert result["deployment_id"] == "dep_ctx"
 
 
 @pytest.mark.asyncio
 async def test_deploy_uses_env_vars():
-    """deploy() falls back to NINETRIX_WORKSPACE_ID and NINETRIX_API_KEY."""
+    """deploy() falls back to NINETRIX_ORG_ID and NINETRIX_API_KEY."""
     agent = _make_agent()
 
     mock_response = MagicMock()
@@ -423,7 +423,7 @@ async def test_deploy_uses_env_vars():
     with patch("ninetrix._internals.http.get_http_client", return_value=mock_client), \
          patch("ninetrix._internals.tenant.get_tenant", return_value=None), \
          patch.dict(os.environ, {
-             "NINETRIX_WORKSPACE_ID": "ws_env",
+             "NINETRIX_ORG_ID": "ws_env",
              "NINETRIX_API_KEY": "key_env",
          }):
         result = await agent.deploy()

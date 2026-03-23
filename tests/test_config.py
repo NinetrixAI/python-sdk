@@ -60,7 +60,7 @@ class TestDefaults:
         assert cfg.api_url == ""
         assert cfg.runner_token == ""
         assert cfg.mcp_gateway_url == ""
-        assert cfg.workspace_id == ""
+        assert cfg.org_id == ""
         assert cfg.api_key == ""
         assert cfg.telemetry_enabled is True
         assert cfg.debug is False
@@ -112,14 +112,14 @@ class TestExplicitKwargs:
             api_url="https://api.ninetrix.io",
             runner_token="tok_abc",
             mcp_gateway_url="http://localhost:8080",
-            workspace_id="ws-123",
+            org_id="ws-123",
             api_key="nxt_test",
             log_level="DEBUG",
         )
         assert cfg.api_url == "https://api.ninetrix.io"
         assert cfg.runner_token == "tok_abc"
         assert cfg.mcp_gateway_url == "http://localhost:8080"
-        assert cfg.workspace_id == "ws-123"
+        assert cfg.org_id == "ws-123"
         assert cfg.api_key == "nxt_test"
         assert cfg.log_level == "DEBUG"
 
@@ -154,10 +154,10 @@ class TestEnvVars:
         cfg = _load()
         assert cfg.api_url == "https://api.ninetrix.io"
 
-    def test_workspace_id_from_env(self, monkeypatch):
-        monkeypatch.setenv("NINETRIX_WORKSPACE_ID", "ws-abc")
+    def test_org_id_from_env(self, monkeypatch):
+        monkeypatch.setenv("NINETRIX_ORG_ID", "ws-abc")
         cfg = _load()
-        assert cfg.workspace_id == "ws-abc"
+        assert cfg.org_id == "ws-abc"
 
     def test_api_key_from_env(self, monkeypatch):
         monkeypatch.setenv("NINETRIX_API_KEY", "nxt_live_abc123")

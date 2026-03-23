@@ -13,7 +13,7 @@ dashboard views as Docker-run agents.
 Auth resolution order
 ---------------------
 1. ``NINETRIX_API_URL`` + ``NINETRIX_RUNNER_TOKEN`` env vars  (explicit override)
-2. ``TenantContext`` (NINETRIX_WORKSPACE_ID + NINETRIX_API_KEY)  → SaaS cloud
+2. ``TenantContext`` (NINETRIX_ORG_ID + NINETRIX_API_KEY)  → SaaS cloud
 3. ``~/.agentfile/.api-secret`` file exists  → local ninetrix-oss dashboard
 4. Nothing configured  → ``RunnerReporter.resolve()`` returns ``None``
 
@@ -93,7 +93,7 @@ class RunnerReporter:
             is_local = "localhost" in api_url or "127.0.0.1" in api_url
             return cls(ReporterConfig(api_url=api_url, token=token, is_local=is_local))
 
-        # Priority 2 — TenantContext (set by NINETRIX_WORKSPACE_ID + NINETRIX_API_KEY)
+        # Priority 2 — TenantContext (set by NINETRIX_ORG_ID + NINETRIX_API_KEY)
         try:
             from ninetrix._internals.tenant import get_tenant
             tenant = get_tenant()
