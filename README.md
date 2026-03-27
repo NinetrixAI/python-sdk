@@ -139,6 +139,17 @@ pip install 'ninetrix-sdk[otel]'          # OpenTelemetry tracing
 
 ---
 
+## Ecosystem
+
+The SDK works with two community registries:
+
+- **[Tools Hub](https://github.com/Ninetrix-ai/tools-hub)** — community tool registry. Use `hub://` URIs in `agentfile.yaml` to pull tools at build time. Each tool has a `TOOL.yaml` manifest with dependencies, credentials, and companion skills.
+- **[Skills Hub](https://github.com/Ninetrix-ai/skills-hub)** — community skills library. Skills are prompt-layer playbooks (`SKILL.md`) injected into your agent's system prompt at build time. They teach agents *how* to work — no code required.
+
+Tools provide capabilities. Skills teach how to use them. The SDK connects both via the `@Tool` decorator, `ToolSource` plugins, and YAML serialization.
+
+---
+
 ## License
 
 Apache 2.0
