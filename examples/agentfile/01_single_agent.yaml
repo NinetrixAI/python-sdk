@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://schema.ninetrix.io/agentfile.json
+# docs: https://docs.ninetrix.io
+#
+# Example 01 — Single agent: web research assistant
+#
+# This agent answers questions by searching the web and synthesising results.
+# It has a $0.10 budget per run and will not invent facts.
+#
+# Usage:
+#   ninetrix build --file examples/agentfile/01_single_agent.yaml
+#   ninetrix run   --file examples/agentfile/01_single_agent.yaml
+#   # Then type your question at the prompt, e.g.:
+#   #   "What are the main differences between Python 3.12 and 3.13?"
+#
+# Prerequisites:
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   ninetrix build (installs Docker image the first time)
+
+governance:
+  max_budget_per_run: 0.10       # hard spend cap in USD
+  human_approval:
+    enabled: false
+    actions: []
+
+agents:
+  researcher:
+    metadata:
+      name: researcher
+      role: "Web Research Assistant"
+      goal: "Answer questions accurately using up-to-date web search results"
+      instructions: |
+        Search the web when you need current information or facts you are
+        uncertain about. Summarise findings in clear, concise prose.
+        Always cite the source URL for any specific claim.
+        If no relevant results are found, say so explicitly — do not guess.
+      constraints:
+        - "Do not fabricate facts, statistics, or URLs"
+        - "Keep answers under 400 words unless the user asks for more detail"
+    runtime:
+      provider: anthropic
+      model: claude-haiku-4-5-20251001   # fast + cheap for web Q&A
+      temperature: 0.2
+    tools:
+      - name: web_search
+        source: mcp://duckduckgo
+    collaborators: []

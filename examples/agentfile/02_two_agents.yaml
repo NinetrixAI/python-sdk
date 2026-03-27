@@ -1,0 +1,134 @@
+# yaml-language-server: $schema=https://schema.ninetrix.io/agentfile.json
+# docs: https://docs.ninetrix.io
+#
+# Example 02 — Two agents: researcher → writer pipeline
+#
+# The orchestrator receives a topic from the user, delegates research to
+# the researcher agent, then delegates writing to the writer agent, and
+# returns the finished article.
+#
+# Agents communicate via agent handoff (transfer_to_agent tool injected
+# automatically). Both share a volume so the researcher can persist its
+# findings as a Markdown file that the writer reads.
+#
+# Usage:
+#   ninetrix build --file examples/agentfile/02_two_agents.yaml
+#   ninetrix up    --file examples/agentfile/02_two_agents.yaml
+#   ninetrix invoke --agent orchestrator \
+#     -m "Write a technical blog post about WebAssembly in 2025"
+#   ninetrix logs --follow
+#   cat shared/workspace/output.md      # final article
+#   ninetrix down
+#
+# Prerequisites:
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   export DATABASE_URL=postgresql://localhost/agentfile   # optional — enables resume
+
+governance:
+  max_budget_per_run: 0.50
+  human_approval:
+    enabled: false
+    actions: []
+
+persistence:
+  provider: postgres
+  url: "${DATABASE_URL}"        # remove this block if you don't need resume
+
+# Shared filesystem: both agents read/write /data inside the container.
+volumes:
+  workspace:
+    provider: local
+    host_path: "./shared/workspace"
+    container_path: /data
+    read_only: false
+
+agents:
+
+  # ── Entry point ──────────────────────────────────────────────────────────────
+  # Receives the user's request, delegates sequentially, returns the result.
+  orchestrator:
+    metadata:
+      name: orchestrator
+      role: "Orchestrator"
+      goal: "Coordinate the researcher and writer to produce a polished article"
+      instructions: |
+        You manage a two-step pipeline:
+          1. Call transfer_to_agent("researcher") with the user's topic.
+             The researcher will save its findings to /data/research.md.
+          2. Once the researcher is done, call transfer_to_agent("writer").
+             The writer will save the finished article to /data/output.md.
+          3. Read /data/output.md with the read_file tool and return its contents
+             as your final answer.
+        Do not do any research or writing yourself.
+    runtime:
+      provider: anthropic
+      model: claude-haiku-4-5-20251001
+      temperature: 0.0
+    tools:
+      - name: files
+        source: mcp://filesystem
+    collaborators: [researcher, writer]
+    volumes:
+      - workspace
+
+  # ── Specialist 1: researcher ─────────────────────────────────────────────────
+  # Searches the web and writes structured findings to /data/research.md.
+  researcher:
+    metadata:
+      name: researcher
+      role: "Research Specialist"
+      goal: "Find accurate, current information and save it for the writer"
+      instructions: |
+        Search the web thoroughly for the given topic.
+        Organise your findings under clear headings:
+          ## Key Facts
+          ## Recent Developments
+          ## Sources
+        Save the complete output to /data/research.md using write_file.
+        Do not write the final article — only raw research notes.
+      constraints:
+        - "Cite every claim with a source URL in the Sources section"
+        - "Do not fabricate facts or statistics"
+    runtime:
+      provider: anthropic
+      model: claude-haiku-4-5-20251001
+      temperature: 0.1
+    tools:
+      - name: web_search
+        source: mcp://duckduckgo
+      - name: files
+        source: mcp://filesystem
+    collaborators: []
+    volumes:
+      - workspace
+
+  # ── Specialist 2: writer ─────────────────────────────────────────────────────
+  # Transforms raw research notes into a polished technical blog post.
+  writer:
+    metadata:
+      name: writer
+      role: "Technical Writer"
+      goal: "Transform research notes into a polished, engaging article"
+      instructions: |
+        Read /data/research.md using read_file.
+        Write a clear technical blog post structured as:
+          # <Title>
+          ## Introduction   (2–3 sentences)
+          ## <Section per major theme>
+          ## Conclusion     (2–3 sentences)
+          ## References
+        Aim for 500–700 words. Use plain language — avoid jargon.
+        Save the finished article to /data/output.md using write_file.
+      constraints:
+        - "Keep all source URLs from the research notes in the References section"
+        - "Do not add information not present in the research notes"
+    runtime:
+      provider: anthropic
+      model: claude-sonnet-4-6    # stronger model for quality writing
+      temperature: 0.5
+    tools:
+      - name: files
+        source: mcp://filesystem
+    collaborators: []
+    volumes:
+      - workspace
